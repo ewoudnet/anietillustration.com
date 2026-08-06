@@ -1,0 +1,50 @@
+name: Deploy naar aniet.nl
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: composer
+
+      - name: Composer install (productie)
+        run: composer install --no-dev --optimize-autoloader --no-progress
+
+      - name: Vendor-map afschermen
+        run: cp deploy-htaccess-core.txt vendor/.htaccess
+
+      - name: FTP deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ftp.aniet.nl
+          port: 21
+          protocol: ftps
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./
+          server-dir: /anietillustration.com/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/.claude/**
+            **/docs/**
+            **/sql/**
+            **/logs/*.log
+            .env
+            .env.example
+            CLAUDE.md
+            composer.json
+            composer.lock
+            deploy-htaccess-core.txt
+            README*
