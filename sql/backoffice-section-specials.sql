@@ -1,7 +1,8 @@
--- Voegt de sectie "Specials" toe aan de backoffice-database (aniet_backoffice), zodat
--- toegang tot backend/specials/ per gebruiker instelbaar is via user_sections, net als
--- de bestaande sectie "Aniet Illustration". Handmatig uitvoeren op zowel de lokale als
--- de live aniet_backoffice-database (deploy.yml raakt geen database's aan).
+-- Voegt de sectie "Specials" toe aan de sections-tabel (dezelfde database als Specials
+-- en de backoffice-tabellen, zie DB_* in .env), zodat toegang tot backend/specials/ per
+-- gebruiker instelbaar is via user_sections, net als de bestaande sectie
+-- "Aniet Illustration". Handmatig uitvoeren op zowel lokaal als live (deploy.yml raakt
+-- geen database's aan).
 --
 -- Idempotent: veilig opnieuw uit te voeren.
 

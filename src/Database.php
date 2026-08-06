@@ -10,8 +10,10 @@ use mysqli_stmt;
 
 /**
  * Backoffice-database (Aniet Illustration + Settings, tabellen users/sections/cards/
- * products/...) - los van SpecialsDatabase (Specials, PDO), zie CLAUDE.md/docs voor de
- * achtergrond. Leest BO_DB_*-env-keys i.p.v. DB_* om niet te botsen met SpecialsDatabase.
+ * products/...) - zit in dezelfde live database als SpecialsDatabase (Specials, PDO;
+ * tabelnamen botsen niet), dus dezelfde DB_*-env-keys. Twee losse connecties/drivers
+ * (mysqli hier, PDO in SpecialsDatabase) omdat de geporte backoffice-code overal op
+ * mysqli's bind_param-API is gebouwd - geen aparte database nodig.
  */
 final class Database
 {
@@ -25,10 +27,10 @@ final class Database
 
         Config::load();
 
-        $host = Config::get('BO_DB_HOST', 'localhost');
-        $name = Config::get('BO_DB_NAME');
-        $user = Config::get('BO_DB_USER');
-        $pass = Config::get('BO_DB_PASS', '') ?? '';
+        $host = Config::get('DB_HOST', 'localhost');
+        $name = Config::get('DB_NAME');
+        $user = Config::get('DB_USER');
+        $pass = Config::get('DB_PASS', '') ?? '';
 
         mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
