@@ -5,6 +5,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 
 use App\Auth;
+use App\AdventOrderRepository;
 use App\OrderRepository;
 use App\SpecialRepository;
 
@@ -20,6 +21,12 @@ $hasFilters = (bool) array_filter($filters);
 $orderRepository = new OrderRepository();
 $orders = $hasFilters ? $orderRepository->search($filters) : $orderRepository->findAll();
 $specials = (new SpecialRepository())->findAll();
+$adventOrders = (new AdventOrderRepository())->findAll();
+
+$adventTypeLabels = [
+    'advent' => 'Adventkalender',
+    'kalender2027' => 'Kalender 2027',
+];
 
 $totalOrders = count($orders);
 $paidOrders = array_filter($orders, static fn (array $o) => $o['status'] === 'paid');
@@ -134,6 +141,52 @@ require __DIR__ . '/../partials/layout-start.php';
                         <td><?= h($order['order_reference']) ?></td>
                         <td><?= h($order['special_title'] ?? '—') ?></td>
                         <td><?= h($order['variant_label'] ?? '—') ?></td>
+                        <td><?= h((new DateTimeImmutable($order['created_at']))->format('d-m-Y H:i')) ?></td>
+                        <td><?= h($order['first_name'] . ' ' . $order['last_name']) ?></td>
+                        <td><?= h($order['email']) ?></td>
+                        <td><?= h($order['street'] . ' ' . $order['house_number'] . ', ' . $order['postal_code'] . ' ' . $order['city']) ?></td>
+                        <td><?= (int) $order['quantity'] ?></td>
+                        <td>€ <?= h(number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.')) ?></td>
+                        <td><span class="badge <?= orderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span></td>
+                        <td><?= $order['confirmation_email_sent_at'] !== null ? '✅' : '—' ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</div>
+
+<div class="page-header" style="margin-top: 32px;">
+    <h1>Advent bestellingen (bestaand systeem)</h1>
+</div>
+<p>Bestellingen uit het losse, nog operationele <code>adventskaarten-bestellen</code>-project — alleen ter inzage, beheer hiervan blijft in de eigen admin van dat project.</p>
+
+<div class="card">
+    <?php if (count($adventOrders) === 0): ?>
+        <p>Er zijn nog geen advent bestellingen.</p>
+    <?php else: ?>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                <tr>
+                    <th>Referentie</th>
+                    <th>Type</th>
+                    <th>Datum</th>
+                    <th>Naam</th>
+                    <th>E-mail</th>
+                    <th>Adres</th>
+                    <th>Aantal</th>
+                    <th>Totaal</th>
+                    <th>Status</th>
+                    <th>Mail verzonden</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($adventOrders as $order): ?>
+                    <tr>
+                        <td><?= h($order['order_reference']) ?></td>
+                        <td><?= h($adventTypeLabels[$order['product_type']] ?? ucfirst($order['product_type'])) ?></td>
                         <td><?= h((new DateTimeImmutable($order['created_at']))->format('d-m-Y H:i')) ?></td>
                         <td><?= h($order['first_name'] . ' ' . $order['last_name']) ?></td>
                         <td><?= h($order['email']) ?></td>

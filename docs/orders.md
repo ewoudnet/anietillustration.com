@@ -20,6 +20,9 @@ specials-orders; in de wholesale-fase uitgebreid met wholesale-orders
 
 ## Status / openstaande punten
 - [x] Orderoverzicht in backend met filter op special (+ status + zoeken)
+- [x] Alleen-lezen overzicht van bestaande `advent_orders` (oud
+  `adventskaarten-bestellen`-systeem) onderaan hetzelfde orderoverzicht —
+  `src/AdventOrderRepository.php`, geen filter/export
 - [x] Excel-export van gefilterde orders
 - [x] Mollie-betaalflow + webhook (naar voorbeeld `/advent`)
 - [x] Bevestigingsmail bij betaling (PHPMailer), idempotent via
@@ -43,4 +46,12 @@ foutafhandeling vangt dit netjes op) → order zichtbaar + filterbaar in
   **Waarom:** zelfde patroon als `adventskaarten-bestellen`, dat advent en
   kalender2027 al in één orders-tabel met `product_type` combineert —
   voorkomt duplicatie van betaal- en exportlogica.
+  **Datum:** 2026-08-06
+- **Beslissing:** bestaande `advent_orders` alleen-lezen tonen in hetzelfde
+  orderoverzicht, geen aparte DB-connectie.
+  **Waarom:** `anietillustration.com` en `adventskaarten-bestellen` draaien
+  op dezelfde hosting-database (zelfde `DB_NAME`/`DB_USER` in beide
+  `.env`-bestanden), dus `advent_orders` is zonder extra config bereikbaar
+  via de bestaande `Database`-connectie. Schrijven blijft voorbehouden aan
+  het bestaande advent-systeem (zie CLAUDE.md).
   **Datum:** 2026-08-06
