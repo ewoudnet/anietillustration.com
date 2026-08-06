@@ -21,16 +21,21 @@ lopende specials met daaronder de verlopen specials.
 
 ## Status / openstaande punten
 - [x] Databaseschema: `specials` (`title`, `banner_path`, `description`,
-  `active`, `starts_at`, `ends_at`) + `special_price_variants` (`label`,
-  `price_cents`, `sort_order`, `active`), zie `sql/schema.sql`
+  `active`, `ship_eu`, `ship_world`, `starts_at`, `ends_at`) +
+  `special_price_variants` (`label`, `price_nl_cents`, `price_eu_cents`,
+  `price_world_cents`, `sort_order`, `active`), zie `sql/schema.sql` (bestaande
+  database: `sql/migrations/001_zone_pricing.sql`)
 - [x] Publieke overzichtspagina (lopend + verlopen)
 - [x] Publiek besteltraject per special (formulier → order + Mollie-betaling
-  → webhook → bedankpagina — zelfde flow als `/advent`)
-- [x] Backend CRUD voor specials incl. banner-upload en repeatable
-  prijsvariant-rijen (JS `<template>`-clone, server-side opnieuw
-  gevalideerd)
+  → webhook → bedankpagina — zelfde flow als `/advent`), met live
+  prijsberekening op basis van het gekozen land (net als de oude
+  advent-pagina)
+- [x] Backend CRUD voor specials incl. banner-upload, verzendgebied-toggles
+  (EU/wereld) en repeatable prijsvariant-rijen met 3 prijzen per zone (JS
+  `<template>`-clone, server-side opnieuw gevalideerd)
 - [x] Status aan/uit-toggle (`active`) + optionele `starts_at`/`ends_at` voor
   automatisch "lopend"/"verlopen"
+- [x] Directe link vanuit het bewerkformulier naar de publieke special-pagina
 
 ## Statusbepaling (lopend/verlopen/concept)
 - **Concept** (nooit publiek zichtbaar): `active = 0`.
@@ -41,10 +46,17 @@ lopende specials met daaronder de verlopen specials.
   een `starts_at` in de toekomst.
 
 ## Beslissingen & rationale
-- **Beslissing (bevestigd door gebruiker):** prijsvarianten hebben een vaste
-  totaalprijs, geen zone-gebaseerde verzendtoeslag (zoals advent).
-  **Waarom:** eenvoudiger formulier/schema; kan later alsnog per special met
-  meerdere varianten voor verschillende regio's als dat nodig is.
+- **Vervangen beslissing (was: vaste totaalprijs per variant, geen
+  zone-toeslag).** Alsnog land-gebaseerde prijszones ingevoerd: elke
+  prijsvariant heeft een prijs voor NL, EU (buiten NL) en wereld (buiten EU) -
+  net als het oude advent-systeem (`Pricing::priceForZone`), maar dan per
+  prijsvariant in plaats van één vaste prijs per product. Welke zones
+  daadwerkelijk aangeboden worden op de bestelpagina is instelbaar per
+  special via `ship_eu`/`ship_world` (specials kunnen dus ook NL-only of
+  NL+EU zijn).
+  **Waarom:** gebruiker wil per land een andere prijs kunnen instellen
+  (bijv. NL €25 / EU €30 / wereld €35), en niet elke special wil wereldwijd
+  verzenden.
   **Datum:** 2026-08-06
 - **Beslissing:** prijsvarianten worden bij elke edit volledig verwijderd en
   opnieuw ingevoegd (geen losse update-per-rij).
@@ -63,4 +75,28 @@ lopende specials met daaronder de verlopen specials.
   nodig is. De bestaande advent-map en -admin blijven intact en operationeel
   totdat de gebruiker expliciet akkoord geeft om ze te verwijderen, pas
   nadat dit nieuwe systeem het overneemt.
+  **Datum:** 2026-08-06
+- **Beslissing:** `Countries.php` uitgebreid met een derde zone ("wereld" -
+  landen buiten de EU, geen volledige ISO-lijst maar een ruime praktische
+  set). Welke zones een special aanbiedt op de bestelpagina is per special
+  instelbaar (`ship_eu`/`ship_world`), onafhankelijk van elkaar.
+  **Waarom:** nodig voor de wereld-prijszone; niet elke special verzendt
+  wereldwijd of zelfs buiten NL.
+  **Datum:** 2026-08-06
+- **Beslissing:** styling van `specials/` en `backend/` overgenomen van de
+  bestaande merkstijl op `aniet.nl/advent/` (publieke pagina) en
+  `aniet.nl/backoffice` (admin) - kleuren, fonts (Baloo 2 + Quicksand) en
+  pil-vormige knoppen, met behoud van de eigen paginastructuur (backend
+  gebruikt een uitklapbare sidebar i.p.v. de topbar-navigatie van
+  `backoffice`).
+  **Waarom:** consistente merkbeleving met de andere Aniet Illustration-sites
+  op `aniet.nl`.
+  **Datum:** 2026-08-06
+- **Advent-special overgenomen** als concept (`active = 0`) in
+  `sql/seed_advent_special.sql`, met de productieprijzen/introtekst uit
+  `adventskaarten-bestellen` (NL €34,95 / EU €40,00 / wereld €50,00,
+  `ship_world` staat uit - alleen NL+EU, zoals de huidige advent-pagina).
+  **Let op:** dit SQL-bestand moet nog handmatig uitgevoerd worden op de
+  database - er was geen databasetoegang beschikbaar om dit automatisch te
+  doen.
   **Datum:** 2026-08-06

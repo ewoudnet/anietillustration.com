@@ -17,8 +17,21 @@ $old = $_SESSION['flash_old'] ?? [];
 unset($_SESSION['flash_errors'], $_SESSION['flash_old']);
 
 $csrfToken = Csrf::token();
-$countries = Countries::shippableForStorefront();
-asort($countries, SORT_LOCALE_STRING);
+
+$countries = [];
+$countryZones = [];
+if ($special !== null) {
+    $countries = Countries::shippableFor((bool) $special['ship_eu'], (bool) $special['ship_world']);
+    asort($countries, SORT_LOCALE_STRING);
+    foreach (array_keys($countries) as $code) {
+        $countryZones[$code] = Countries::zoneFor($code);
+    }
+}
+
+function formatEuro(?int $cents): string
+{
+    return $cents !== null ? number_format($cents / 100, 2, ',', '.') : '-';
+}
 ?>
 <!doctype html>
 <html lang="nl">
@@ -57,7 +70,7 @@ asort($countries, SORT_LOCALE_STRING);
             <?php if (empty($special['variants'])): ?>
                 <div class="alert alert-error">Er zijn momenteel geen prijsvarianten beschikbaar voor deze special.</div>
             <?php else: ?>
-                <form method="post" action="process-order.php">
+                <form method="post" action="process-order.php" id="order-form">
                     <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
                     <input type="hidden" name="special_id" value="<?= (int) $special['id'] ?>">
 
@@ -67,7 +80,7 @@ asort($countries, SORT_LOCALE_STRING);
                             <label class="variant-option">
                                 <input type="radio" name="price_variant_id" value="<?= (int) $variant['id'] ?>"
                                     <?= (string) ($old['price_variant_id'] ?? '') === (string) $variant['id'] ? 'checked' : '' ?> required>
-                                <?= h($variant['label']) ?> &mdash; € <?= h(number_format($variant['price_cents'] / 100, 2, ',', '.')) ?>
+                                <?= h($variant['label']) ?> &mdash; €<span class="variant-price" data-variant-id="<?= (int) $variant['id'] ?>"><?= h(formatEuro((int) $variant['price_nl_cents'])) ?></span>
                             </label>
                         <?php endforeach; ?>
                     </div>
@@ -75,6 +88,17 @@ asort($countries, SORT_LOCALE_STRING);
                     <div class="field">
                         <label for="quantity">Aantal</label>
                         <input type="number" id="quantity" name="quantity" min="1" max="20" value="<?= h($old['quantity'] ?? '1') ?>" required>
+                    </div>
+
+                    <div class="summary" id="summary">
+                        <div class="summary-row">
+                            <span>Prijs per stuk (<span id="summary-qty">1</span>x)</span>
+                            <span>€<span id="summary-unit-price">0,00</span></span>
+                        </div>
+                        <div class="summary-row total">
+                            <span>Totaal</span>
+                            <span>€<span id="summary-total">0,00</span></span>
+                        </div>
                     </div>
 
                     <div class="row">
@@ -126,6 +150,58 @@ asort($countries, SORT_LOCALE_STRING);
 
                     <button type="submit" class="btn">Bestellen &amp; betalen</button>
                 </form>
+
+                <script>
+                (function () {
+                    const pricing = {
+                        variants: <?= json_encode(array_map(
+                            static fn (array $v): array => [
+                                'id' => (int) $v['id'],
+                                'nl' => (int) $v['price_nl_cents'],
+                                'eu' => $v['price_eu_cents'] !== null ? (int) $v['price_eu_cents'] : null,
+                                'world' => $v['price_world_cents'] !== null ? (int) $v['price_world_cents'] : null,
+                            ],
+                            $special['variants']
+                        )) ?>,
+                        countryZones: <?= json_encode($countryZones) ?>,
+                    };
+
+                    function formatCents(cents) {
+                        return (cents / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+
+                    function selectedVariant() {
+                        const checked = document.querySelector('input[name="price_variant_id"]:checked');
+                        if (!checked) {
+                            return null;
+                        }
+                        return pricing.variants.find((v) => v.id === parseInt(checked.value, 10)) || null;
+                    }
+
+                    function updatePricing() {
+                        const variant = selectedVariant();
+                        const countryCode = document.getElementById('country_code').value;
+                        const zone = pricing.countryZones[countryCode] || 'nl';
+                        const qty = Math.max(1, parseInt(document.getElementById('quantity').value || '1', 10));
+
+                        document.querySelectorAll('.variant-price').forEach(function (el) {
+                            const v = pricing.variants.find((item) => item.id === parseInt(el.dataset.variantId, 10));
+                            if (v && v[zone] !== null) {
+                                el.textContent = formatCents(v[zone]);
+                            }
+                        });
+
+                        const unitPrice = variant && variant[zone] !== null ? variant[zone] : 0;
+                        document.getElementById('summary-qty').textContent = qty;
+                        document.getElementById('summary-unit-price').textContent = formatCents(unitPrice);
+                        document.getElementById('summary-total').textContent = formatCents(unitPrice * qty);
+                    }
+
+                    document.getElementById('order-form').addEventListener('change', updatePricing);
+                    document.getElementById('quantity').addEventListener('input', updatePricing);
+                    updatePricing();
+                })();
+                </script>
             <?php endif; ?>
         </div>
 

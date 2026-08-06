@@ -114,7 +114,7 @@ final class SpecialRepository
 
     /**
      * @param array<string, mixed> $data
-     * @param array<int, array{label: string, price_cents: int}> $variants
+     * @param array<int, array{label: string, price_nl_cents: int, price_eu_cents: ?int, price_world_cents: ?int}> $variants
      */
     public function create(array $data, array $variants): int
     {
@@ -123,14 +123,16 @@ final class SpecialRepository
 
         try {
             $stmt = $pdo->prepare(
-                'INSERT INTO specials (title, banner_path, description, active, starts_at, ends_at)
-                 VALUES (?, ?, ?, ?, ?, ?)'
+                'INSERT INTO specials (title, banner_path, description, active, ship_eu, ship_world, starts_at, ends_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $data['title'],
                 $data['banner_path'],
                 $data['description'],
                 $data['active'] ? 1 : 0,
+                $data['ship_eu'] ? 1 : 0,
+                $data['ship_world'] ? 1 : 0,
                 $data['starts_at'],
                 $data['ends_at'],
             ]);
@@ -149,7 +151,7 @@ final class SpecialRepository
 
     /**
      * @param array<string, mixed> $data
-     * @param array<int, array{label: string, price_cents: int}> $variants
+     * @param array<int, array{label: string, price_nl_cents: int, price_eu_cents: ?int, price_world_cents: ?int}> $variants
      */
     public function update(int $id, array $data, array $variants): void
     {
@@ -158,7 +160,7 @@ final class SpecialRepository
 
         try {
             $stmt = $pdo->prepare(
-                'UPDATE specials SET title = ?, banner_path = ?, description = ?, active = ?, starts_at = ?, ends_at = ?
+                'UPDATE specials SET title = ?, banner_path = ?, description = ?, active = ?, ship_eu = ?, ship_world = ?, starts_at = ?, ends_at = ?
                  WHERE id = ?'
             );
             $stmt->execute([
@@ -166,6 +168,8 @@ final class SpecialRepository
                 $data['banner_path'],
                 $data['description'],
                 $data['active'] ? 1 : 0,
+                $data['ship_eu'] ? 1 : 0,
+                $data['ship_world'] ? 1 : 0,
                 $data['starts_at'],
                 $data['ends_at'],
                 $id,
@@ -185,7 +189,7 @@ final class SpecialRepository
      * blijven intact - die bewaren een eigen snapshot (variant_label/unit_price_cents) en
      * hebben geen foreign key naar price_variant_id.
      *
-     * @param array<int, array{label: string, price_cents: int}> $variants
+     * @param array<int, array{label: string, price_nl_cents: int, price_eu_cents: ?int, price_world_cents: ?int}> $variants
      */
     private function saveVariants(int $specialId, array $variants): void
     {
@@ -195,12 +199,19 @@ final class SpecialRepository
         $delete->execute([$specialId]);
 
         $insert = $pdo->prepare(
-            'INSERT INTO special_price_variants (special_id, label, price_cents, sort_order, active)
-             VALUES (?, ?, ?, ?, 1)'
+            'INSERT INTO special_price_variants (special_id, label, price_nl_cents, price_eu_cents, price_world_cents, sort_order, active)
+             VALUES (?, ?, ?, ?, ?, ?, 1)'
         );
 
         foreach (array_values($variants) as $sortOrder => $variant) {
-            $insert->execute([$specialId, $variant['label'], $variant['price_cents'], $sortOrder]);
+            $insert->execute([
+                $specialId,
+                $variant['label'],
+                $variant['price_nl_cents'],
+                $variant['price_eu_cents'],
+                $variant['price_world_cents'],
+                $sortOrder,
+            ]);
         }
     }
 

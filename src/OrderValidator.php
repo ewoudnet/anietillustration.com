@@ -10,12 +10,15 @@ final class OrderValidator
 
     /**
      * @param array<string,mixed> $input
-     * @param array<int, array<string,mixed>> $variants Actieve prijsvarianten van de special.
+     * @param array<string,mixed> $special Special incl. `ship_eu`/`ship_world` en `variants` (actieve prijsvarianten).
      * @return array{0: array<string,mixed>, 1: string[]} [sanitizedData, errors]
      */
-    public static function validate(array $input, array $variants): array
+    public static function validate(array $input, array $special): array
     {
         $errors = [];
+        $variants = $special['variants'];
+        $shipEu = (bool) $special['ship_eu'];
+        $shipWorld = (bool) $special['ship_world'];
 
         $firstName = trim((string) ($input['first_name'] ?? ''));
         $lastName = trim((string) ($input['last_name'] ?? ''));
@@ -46,8 +49,8 @@ final class OrderValidator
         if ($city === '' || mb_strlen($city) > 100) {
             $errors[] = 'Vul een geldige plaats in.';
         }
-        if (!Countries::isShippableForStorefront($countryCode)) {
-            $errors[] = 'We verzenden alleen binnen Nederland en de EU. Kies een geldig land.';
+        if (!Countries::isShippableFor($countryCode, $shipEu, $shipWorld)) {
+            $errors[] = 'We verzenden niet naar het gekozen land. Kies een geldig land.';
         }
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
             $errors[] = 'Vul een geldig e-mailadres in.';
@@ -73,6 +76,21 @@ final class OrderValidator
             $errors[] = 'Kies een geldige prijsvariant.';
         }
 
+        $unitPriceCents = null;
+        if ($selectedVariant !== null && Countries::isValid($countryCode)) {
+            $zone = Countries::zoneFor($countryCode);
+            $priceColumn = match ($zone) {
+                'nl' => 'price_nl_cents',
+                'eu' => 'price_eu_cents',
+                default => 'price_world_cents',
+            };
+            $unitPriceCents = $selectedVariant[$priceColumn] ?? null;
+
+            if ($unitPriceCents === null) {
+                $errors[] = 'Deze prijsvariant is niet beschikbaar voor het gekozen land.';
+            }
+        }
+
         $sanitized = [
             'firstName' => $firstName,
             'lastName' => $lastName,
@@ -84,6 +102,7 @@ final class OrderValidator
             'email' => $email,
             'quantity' => $quantity,
             'variant' => $selectedVariant,
+            'unitPriceCents' => $unitPriceCents !== null ? (int) $unitPriceCents : null,
         ];
 
         return [$sanitized, $errors];

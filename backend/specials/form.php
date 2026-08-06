@@ -29,12 +29,25 @@ $formData = $special ?? [
     'description' => '',
     'banner_path' => null,
     'active' => 0,
+    'ship_eu' => 1,
+    'ship_world' => 0,
     'starts_at' => null,
     'ends_at' => null,
 ];
+
+function formatPriceInput(?int $cents): string
+{
+    return $cents !== null ? number_format($cents / 100, 2, '.', '') : '';
+}
+
 $variantRows = $special !== null
     ? array_map(
-        static fn (array $v): array => ['label' => $v['label'], 'price' => number_format($v['price_cents'] / 100, 2, '.', '')],
+        static fn (array $v): array => [
+            'label' => $v['label'],
+            'price_nl' => formatPriceInput((int) $v['price_nl_cents']),
+            'price_eu' => formatPriceInput($v['price_eu_cents'] !== null ? (int) $v['price_eu_cents'] : null),
+            'price_world' => formatPriceInput($v['price_world_cents'] !== null ? (int) $v['price_world_cents'] : null),
+        ],
         $repository->findVariants((int) $special['id'])
     )
     : [];
@@ -49,6 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formData['title'] = trim((string) ($_POST['title'] ?? ''));
     $formData['description'] = trim((string) ($_POST['description'] ?? ''));
     $formData['active'] = isset($_POST['active']) ? 1 : 0;
+    $formData['ship_eu'] = isset($_POST['ship_eu']) ? 1 : 0;
+    $formData['ship_world'] = isset($_POST['ship_world']) ? 1 : 0;
     $formData['starts_at'] = trim((string) ($_POST['starts_at'] ?? '')) !== '' ? $_POST['starts_at'] . ' 00:00:00' : null;
     $formData['ends_at'] = trim((string) ($_POST['ends_at'] ?? '')) !== '' ? $_POST['ends_at'] . ' 23:59:59' : null;
 
@@ -60,29 +75,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'De startdatum moet vóór de einddatum liggen.';
     }
 
+    /**
+     * @return array{0: ?int, 1: bool} [prijs in centen of null, is geldig ingevuld]
+     */
+    $parsePrice = static function (string $raw, bool $required) use (&$errors): array {
+        $raw = trim($raw);
+
+        if ($raw === '') {
+            return [null, !$required];
+        }
+
+        if (!is_numeric(str_replace(',', '.', $raw))) {
+            return [null, false];
+        }
+
+        return [(int) round((float) str_replace(',', '.', $raw) * 100), true];
+    };
+
     $variantLabels = $_POST['variant_label'] ?? [];
-    $variantPrices = $_POST['variant_price'] ?? [];
+    $variantPricesNl = $_POST['variant_price_nl'] ?? [];
+    $variantPricesEu = $_POST['variant_price_eu'] ?? [];
+    $variantPricesWorld = $_POST['variant_price_world'] ?? [];
     $variants = [];
     $variantRows = [];
 
     foreach ($variantLabels as $index => $label) {
         $label = trim((string) $label);
-        $priceRaw = trim((string) ($variantPrices[$index] ?? ''));
+        $rawNl = trim((string) ($variantPricesNl[$index] ?? ''));
+        $rawEu = trim((string) ($variantPricesEu[$index] ?? ''));
+        $rawWorld = trim((string) ($variantPricesWorld[$index] ?? ''));
 
-        if ($label === '' && $priceRaw === '') {
+        if ($label === '' && $rawNl === '' && $rawEu === '' && $rawWorld === '') {
             continue;
         }
 
-        $variantRows[] = ['label' => $label, 'price' => $priceRaw];
+        $variantRows[] = ['label' => $label, 'price_nl' => $rawNl, 'price_eu' => $rawEu, 'price_world' => $rawWorld];
 
-        if ($label === '' || $priceRaw === '' || !is_numeric(str_replace(',', '.', $priceRaw))) {
-            $errors[] = 'Vul bij elke prijsvariant een label en een geldige prijs in.';
+        [$priceNl, $nlValid] = $parsePrice($rawNl, true);
+        [$priceEu, $euValid] = $parsePrice($rawEu, (bool) $formData['ship_eu']);
+        [$priceWorld, $worldValid] = $parsePrice($rawWorld, (bool) $formData['ship_world']);
+
+        if ($label === '' || !$nlValid || !$euValid || !$worldValid) {
+            $errors[] = 'Vul bij elke prijsvariant een label en geldige prijzen in (NL verplicht, EU/wereld verplicht als je daar naar verzendt).';
             continue;
         }
 
         $variants[] = [
             'label' => $label,
-            'price_cents' => (int) round((float) str_replace(',', '.', $priceRaw) * 100),
+            'price_nl_cents' => $priceNl,
+            'price_eu_cents' => $priceEu,
+            'price_world_cents' => $priceWorld,
         ];
     }
 
@@ -110,6 +152,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'description' => $formData['description'] !== '' ? $formData['description'] : null,
             'banner_path' => $bannerPath,
             'active' => (bool) $formData['active'],
+            'ship_eu' => (bool) $formData['ship_eu'],
+            'ship_world' => (bool) $formData['ship_world'],
             'starts_at' => $formData['starts_at'],
             'ends_at' => $formData['ends_at'],
         ];
@@ -128,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if (empty($variantRows)) {
-    $variantRows[] = ['label' => '', 'price' => ''];
+    $variantRows[] = ['label' => '', 'price_nl' => '', 'price_eu' => '', 'price_world' => ''];
 }
 
 function dateInputValue(?string $value): string
@@ -143,6 +187,9 @@ require __DIR__ . '/../partials/layout-start.php';
 ?>
 <div class="page-header">
     <h1><?= h($pageTitle) ?></h1>
+    <?php if ($special !== null): ?>
+        <a href="<?= h(Config::appUrl()) ?>/index.php?s=<?= (int) $special['id'] ?>" target="_blank" rel="noopener">Bekijk special-pagina &rarr;</a>
+    <?php endif; ?>
 </div>
 
 <?php foreach ($errors as $error): ?>
@@ -192,7 +239,20 @@ require __DIR__ . '/../partials/layout-start.php';
             </label>
         </div>
 
+        <h3>Verzendgebied</h3>
+        <div class="field">
+            <label>
+                <input type="checkbox" id="ship_eu" name="ship_eu" value="1" <?= !empty($formData['ship_eu']) ? 'checked' : '' ?> style="width: auto; margin-right: 6px;">
+                Verzenden binnen de EU (buiten Nederland)
+            </label>
+            <label>
+                <input type="checkbox" id="ship_world" name="ship_world" value="1" <?= !empty($formData['ship_world']) ? 'checked' : '' ?> style="width: auto; margin-right: 6px;">
+                Verzenden wereldwijd (buiten de EU)
+            </label>
+        </div>
+
         <h3>Prijsvarianten</h3>
+        <p class="hint">Prijs is inclusief verzending, per zone. Vul de EU-/wereldprijs alleen in als je daar ook naar verzendt.</p>
         <div id="variant-rows">
             <?php foreach ($variantRows as $variant): ?>
                 <div class="variant-row">
@@ -200,9 +260,17 @@ require __DIR__ . '/../partials/layout-start.php';
                         <label>Label</label>
                         <input type="text" name="variant_label[]" placeholder="bijv. 1 kaart" value="<?= h($variant['label']) ?>">
                     </div>
-                    <div class="field" style="flex: 1 1 120px;">
-                        <label>Prijs (€)</label>
-                        <input type="text" name="variant_price[]" placeholder="bijv. 5,95" value="<?= h($variant['price']) ?>">
+                    <div class="field" style="flex: 1 1 110px;">
+                        <label>NL (€)</label>
+                        <input type="text" name="variant_price_nl[]" placeholder="bijv. 25,00" value="<?= h($variant['price_nl']) ?>">
+                    </div>
+                    <div class="field variant-price-eu" style="flex: 1 1 110px;">
+                        <label>EU (€)</label>
+                        <input type="text" name="variant_price_eu[]" placeholder="bijv. 30,00" value="<?= h($variant['price_eu']) ?>">
+                    </div>
+                    <div class="field variant-price-world" style="flex: 1 1 110px;">
+                        <label>Wereld (€)</label>
+                        <input type="text" name="variant_price_world[]" placeholder="bijv. 35,00" value="<?= h($variant['price_world']) ?>">
                     </div>
                     <button type="button" class="btn btn-secondary" style="width: auto;" onclick="this.closest('.variant-row').remove()">Verwijderen</button>
                 </div>
@@ -221,9 +289,17 @@ require __DIR__ . '/../partials/layout-start.php';
             <label>Label</label>
             <input type="text" name="variant_label[]" placeholder="bijv. 1 kaart">
         </div>
-        <div class="field" style="flex: 1 1 120px;">
-            <label>Prijs (€)</label>
-            <input type="text" name="variant_price[]" placeholder="bijv. 5,95">
+        <div class="field" style="flex: 1 1 110px;">
+            <label>NL (€)</label>
+            <input type="text" name="variant_price_nl[]" placeholder="bijv. 25,00">
+        </div>
+        <div class="field variant-price-eu" style="flex: 1 1 110px;">
+            <label>EU (€)</label>
+            <input type="text" name="variant_price_eu[]" placeholder="bijv. 30,00">
+        </div>
+        <div class="field variant-price-world" style="flex: 1 1 110px;">
+            <label>Wereld (€)</label>
+            <input type="text" name="variant_price_world[]" placeholder="bijv. 35,00">
         </div>
         <button type="button" class="btn btn-secondary" style="width: auto;" onclick="this.closest('.variant-row').remove()">Verwijderen</button>
     </div>
@@ -232,7 +308,23 @@ require __DIR__ . '/../partials/layout-start.php';
 document.getElementById('add-variant').addEventListener('click', function () {
     const template = document.getElementById('variant-row-template');
     document.getElementById('variant-rows').appendChild(template.content.cloneNode(true));
+    toggleZonePriceColumns();
 });
+
+function toggleZonePriceColumns() {
+    const shipEu = document.getElementById('ship_eu').checked;
+    const shipWorld = document.getElementById('ship_world').checked;
+    document.querySelectorAll('.variant-price-eu').forEach(function (el) {
+        el.style.display = shipEu ? '' : 'none';
+    });
+    document.querySelectorAll('.variant-price-world').forEach(function (el) {
+        el.style.display = shipWorld ? '' : 'none';
+    });
+}
+
+document.getElementById('ship_eu').addEventListener('change', toggleZonePriceColumns);
+document.getElementById('ship_world').addEventListener('change', toggleZonePriceColumns);
+toggleZonePriceColumns();
 </script>
 
 <?php require __DIR__ . '/../partials/layout-end.php'; ?>

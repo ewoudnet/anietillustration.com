@@ -17,12 +17,13 @@ final class OrderRepository
     }
 
     /**
-     * @param array{firstName:string,lastName:string,street:string,houseNumber:string,postalCode:string,city:string,countryCode:string,email:string,quantity:int} $input
-     * @param array{id:int,label:string,price_cents:int} $variant
+     * @param array{firstName:string,lastName:string,street:string,houseNumber:string,postalCode:string,city:string,countryCode:string,email:string,quantity:int,unitPriceCents:int} $input
+     * @param array{id:int,label:string} $variant
      */
     public function create(int $specialId, array $input, array $variant): array
     {
-        $totalCents = $variant['price_cents'] * $input['quantity'];
+        $unitPriceCents = $input['unitPriceCents'];
+        $totalCents = $unitPriceCents * $input['quantity'];
 
         $id = $this->insertRow([
             'order_reference' => $this->generateUniqueReference(),
@@ -39,7 +40,7 @@ final class OrderRepository
             'country_code' => strtoupper($input['countryCode']),
             'email' => $input['email'],
             'quantity' => $input['quantity'],
-            'unit_price_cents' => $variant['price_cents'],
+            'unit_price_cents' => $unitPriceCents,
             'total_amount_cents' => $totalCents,
             'currency' => 'EUR',
             'status' => 'open',

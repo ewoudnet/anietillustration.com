@@ -36,7 +36,7 @@ if ($special === null) {
     backToFormWithErrors(['Deze special is niet (meer) beschikbaar.'], $_POST, $specialId);
 }
 
-[$data, $errors] = OrderValidator::validate($_POST, $special['variants']);
+[$data, $errors] = OrderValidator::validate($_POST, $special);
 
 if (!empty($errors)) {
     backToFormWithErrors($errors, $_POST, $specialId);
