@@ -149,16 +149,25 @@ function specialUrl(array $item): string
 
                     <fieldset>
                         <legend>Bestelling</legend>
-                        <div class="field">
-                            <label>Keuze *</label>
-                            <?php foreach ($special['variants'] as $variant): ?>
-                                <label class="variant-option">
-                                    <input type="radio" name="price_variant_id" value="<?= (int) $variant['id'] ?>"
-                                        <?= (string) ($old['price_variant_id'] ?? '') === (string) $variant['id'] ? 'checked' : '' ?> required>
-                                    <?= h($variant['label']) ?> &mdash; €<span class="variant-price" data-variant-id="<?= (int) $variant['id'] ?>"><?= h(formatEuro((int) $variant['price_nl_cents'])) ?></span>
-                                </label>
-                            <?php endforeach; ?>
-                        </div>
+                        <?php if (count($special['variants']) === 1): ?>
+                            <?php $onlyVariant = $special['variants'][0]; ?>
+                            <input type="hidden" name="price_variant_id" value="<?= (int) $onlyVariant['id'] ?>">
+                            <div class="field">
+                                <label>Product</label>
+                                <p><?= h($onlyVariant['label']) ?> &mdash; €<span class="variant-price" data-variant-id="<?= (int) $onlyVariant['id'] ?>"><?= h(formatEuro((int) $onlyVariant['price_nl_cents'])) ?></span></p>
+                            </div>
+                        <?php else: ?>
+                            <div class="field">
+                                <label>Keuze *</label>
+                                <?php foreach ($special['variants'] as $variant): ?>
+                                    <label class="variant-option">
+                                        <input type="radio" name="price_variant_id" value="<?= (int) $variant['id'] ?>"
+                                            <?= (string) ($old['price_variant_id'] ?? '') === (string) $variant['id'] ? 'checked' : '' ?> required>
+                                        <?= h($variant['label']) ?> &mdash; €<span class="variant-price" data-variant-id="<?= (int) $variant['id'] ?>"><?= h(formatEuro((int) $variant['price_nl_cents'])) ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
 
                         <div class="field" style="max-width: 160px;">
                             <label for="quantity">Aantal *</label>
@@ -200,11 +209,11 @@ function specialUrl(array $item): string
                     }
 
                     function selectedVariant() {
-                        const checked = document.querySelector('input[name="price_variant_id"]:checked');
-                        if (!checked) {
+                        const input = document.querySelector('input[name="price_variant_id"]:checked, input[name="price_variant_id"][type="hidden"]');
+                        if (!input) {
                             return null;
                         }
-                        return pricing.variants.find((v) => v.id === parseInt(checked.value, 10)) || null;
+                        return pricing.variants.find((v) => v.id === parseInt(input.value, 10)) || null;
                     }
 
                     function updatePricing() {

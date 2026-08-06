@@ -38,7 +38,12 @@ $menu = [
 </head>
 <body>
 <div class="app-shell">
-    <aside class="sidebar">
+    <header class="mobile-topbar">
+        <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Menu openen">☰</button>
+        <span class="mobile-topbar-brand">🗂️ Aniet Illustration</span>
+    </header>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+    <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">🗂️ Aniet Illustration</div>
         <nav class="sidebar-nav">
             <?php foreach ($menu as $section): ?>
