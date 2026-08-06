@@ -1,0 +1,15 @@
+# Hernoem dit bestand naar ".htaccess" (zonder .txt) en upload het IN de map
+# "anietillustration-core" (dus naast vendor/, src/, sql/, .env, logs/). Dit blokkeert alle
+# directe webtoegang tot die map, zodat gevoelige bestanden (.env, broncode) niet via de
+# browser opvraagbaar zijn.
+
+# Apache 2.4+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2 (fallback voor oudere hosting)
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

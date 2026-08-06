@@ -1,0 +1,15 @@
+# Nooit in git - bevat wachtwoorden/API-keys
+.env
+
+# Composer dependencies - CI draait "composer install" vlak voor deploy
+/vendor/
+
+# Lokale logs (structuur blijft behouden via .gitkeep)
+/logs/*.log
+
+# Claude Code lokale sessie-instellingen
+/.claude/settings.local.json
+
+# OS/editor
+.DS_Store
+Thumbs.db
