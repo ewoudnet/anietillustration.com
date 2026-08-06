@@ -23,28 +23,16 @@ jobs:
       - name: Vendor-map afschermen
         run: cp deploy-htaccess-core.txt vendor/.htaccess
 
-      - name: FTP deploy
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ftp.aniet.nl
-          port: 21
-          protocol: ftps
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./
-          server-dir: /home/ns122651/domains/aniet.nl/public_ftp/anietillustration.com/
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.github/**
-            **/.claude/**
-            **/docs/**
-            **/sql/**
-            **/logs/*.log
-            .env
-            .env.example
-            CLAUDE.md
-            composer.json
-            composer.lock
-            deploy-htaccess-core.txt
-            README*
+      - name: SFTP deploy
+        env:
+          SFTP_USER: ${{ secrets.FTP_USERNAME }}
+          SFTP_PASS: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+          cat > deploy.lftp <<EOF
+          set sftp:auto-confirm yes
+          open -u "$SFTP_USER","$SFTP_PASS" sftp://ftp.aniet.nl:22
+          mirror -R --delete-first=false --verbose --exclude-glob .git/ --exclude-glob .github/ --exclude-glob .claude/ --exclude-glob docs/ --exclude-glob sql/ --exclude-glob "*.log" --exclude-glob .env --exclude-glob .env.example --exclude-glob CLAUDE.md --exclude-glob composer.json --exclude-glob composer.lock --exclude-glob deploy-htaccess-core.txt --exclude-glob "README*" ./ /home/ns122651/domains/aniet.nl/public_ftp/anietillustration.com/
+          bye
+          EOF
+          lftp -f deploy.lftp
