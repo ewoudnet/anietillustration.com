@@ -37,6 +37,17 @@ use App\Config;
 Config::load();
 
 if (session_status() === PHP_SESSION_NONE) {
+    // Expliciete SameSite/Secure-cookie-instellingen - zonder deze bleek het sessie-cookie
+    // op sommige mobiele browsers niet betrouwbaar terug te komen tussen het laden van
+    // login.php (CSRF-token) en het versturen van het formulier, met "sessie verlopen" als
+    // gevolg. secure alleen aanzetten op HTTPS, anders werkt lokaal (plain http) niet meer.
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => !empty($_SERVER['HTTPS']),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
     session_start();
 }
 
