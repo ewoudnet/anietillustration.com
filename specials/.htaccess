@@ -1,0 +1,10 @@
+# Herschrijft /specials/{slug} naar index.php?slug={slug}, zodat een special een
+# betrouwbare, deelbare URL heeft i.p.v. index.php?s={id}. Raakt alleen paden die geen
+# bestaand bestand/map zijn, dus assets/, process-order.php, success.php, webhook.php en
+# index.php zelf blijven gewoon direct werken.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^([a-zA-Z0-9-]+)/?$ index.php?slug=$1 [L,QSA]
+</IfModule>

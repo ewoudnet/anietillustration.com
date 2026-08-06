@@ -20,11 +20,18 @@ lopende specials met daaronder de verlopen specials.
   schrijft i.p.v. `backend/assets/`
 
 ## Status / openstaande punten
-- [x] Databaseschema: `specials` (`title`, `banner_path`, `description`,
+- [x] Databaseschema: `specials` (`title`, `slug`, `banner_path`, `description`,
   `active`, `ship_eu`, `ship_world`, `starts_at`, `ends_at`) +
   `special_price_variants` (`label`, `price_nl_cents`, `price_eu_cents`,
   `price_world_cents`, `sort_order`, `active`), zie `sql/schema.sql` (bestaande
-  database: `sql/migrations/001_zone_pricing.sql`)
+  database: `sql/migrations/001_zone_pricing.sql`,
+  `sql/migrations/002_special_slug.sql`)
+- [x] Deelbare/betrouwbare URL per special: `/specials/{slug}` (bijv.
+  `https://aniet.nl/specials/kalender2027`) i.p.v. alleen `?s={id}`. Slug is
+  admin-instelbaar in het bewerkformulier (auto-voorstel op basis van de
+  titel, uniek per special), gerouteerd via `specials/.htaccess`
+  (`mod_rewrite` naar `index.php?slug=...`). `?s={id}` blijft ook werken
+  (fallback voor specials zonder slug en bestaande links).
 - [x] Publieke overzichtspagina (lopend + verlopen)
 - [x] Publiek besteltraject per special (formulier → order + Mollie-betaling
   → webhook → bedankpagina — zelfde flow als `/advent`), met live
@@ -91,6 +98,15 @@ lopende specials met daaronder de verlopen specials.
   `backoffice`).
   **Waarom:** consistente merkbeleving met de andere Aniet Illustration-sites
   op `aniet.nl`.
+  **Datum:** 2026-08-06
+- **Beslissing:** losse `PUBLIC_URL`-configwaarde (naast `APP_URL`) voor de
+  "Bekijk live"/"Bekijk special-pagina"-links in de backend.
+  **Waarom:** `APP_URL` moet de daadwerkelijke omgeving matchen waar de code
+  draait (lokaal `:8002`, later de live submap) omdat Mollie-redirects/
+  webhooks daar op terugkomen; als een admin lokaal werkt zou een link op
+  basis van `APP_URL` dus naar `localhost` wijzen, onbruikbaar om te delen of
+  live te bekijken. `PUBLIC_URL` staat daar los van en wijst altijd naar de
+  echte klant-URL.
   **Datum:** 2026-08-06
 - **Advent-special overgenomen** als concept (`active = 0`) in
   `sql/seed_advent_special.sql`, met de productieprijzen/introtekst uit

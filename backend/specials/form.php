@@ -26,6 +26,7 @@ $errors = [];
 /** @var array<string, mixed> $formData */
 $formData = $special ?? [
     'title' => '',
+    'slug' => '',
     'description' => '',
     'banner_path' => null,
     'active' => 0,
@@ -60,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $formData['title'] = trim((string) ($_POST['title'] ?? ''));
+    $formData['slug'] = SpecialRepository::slugify((string) ($_POST['slug'] ?? ''));
     $formData['description'] = trim((string) ($_POST['description'] ?? ''));
     $formData['active'] = isset($_POST['active']) ? 1 : 0;
     $formData['ship_eu'] = isset($_POST['ship_eu']) ? 1 : 0;
@@ -69,6 +71,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($formData['title'] === '') {
         $errors[] = 'Vul een titel in.';
+    }
+
+    if ($formData['slug'] === '') {
+        $formData['slug'] = SpecialRepository::slugify($formData['title']);
+    }
+
+    if ($formData['slug'] === '') {
+        $errors[] = 'Vul een geldige URL-naam in (letters, cijfers en koppeltekens).';
+    } elseif ($repository->slugExists($formData['slug'], $special !== null ? (int) $special['id'] : null)) {
+        $errors[] = 'Deze URL-naam is al in gebruik door een andere special. Kies een andere.';
     }
 
     if ($formData['starts_at'] !== null && $formData['ends_at'] !== null && $formData['starts_at'] > $formData['ends_at']) {
@@ -149,6 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         $data = [
             'title' => $formData['title'],
+            'slug' => $formData['slug'],
             'description' => $formData['description'] !== '' ? $formData['description'] : null,
             'banner_path' => $bannerPath,
             'active' => (bool) $formData['active'],
@@ -188,7 +201,7 @@ require __DIR__ . '/../partials/layout-start.php';
 <div class="page-header">
     <h1><?= h($pageTitle) ?></h1>
     <?php if ($special !== null): ?>
-        <a href="<?= h(Config::appUrl()) ?>/index.php?s=<?= (int) $special['id'] ?>" target="_blank" rel="noopener">Bekijk special-pagina &rarr;</a>
+        <a href="<?= h(specialPublicUrl($special)) ?>" target="_blank" rel="noopener">Bekijk special-pagina &rarr;</a>
     <?php endif; ?>
 </div>
 
@@ -206,6 +219,12 @@ require __DIR__ . '/../partials/layout-start.php';
         <div class="field">
             <label for="title">Titel</label>
             <input type="text" id="title" name="title" required value="<?= h($formData['title']) ?>">
+        </div>
+
+        <div class="field">
+            <label for="slug">URL-naam</label>
+            <input type="text" id="slug" name="slug" pattern="[a-z0-9-]+" placeholder="bijv. kalender2027" value="<?= h($formData['slug'] ?? '') ?>">
+            <p class="hint">Deelbare link: <?= h(Config::publicUrl()) ?>/<span id="slug-preview"><?= h($formData['slug'] !== '' ? $formData['slug'] : '...') ?></span></p>
         </div>
 
         <div class="field">
@@ -325,6 +344,33 @@ function toggleZonePriceColumns() {
 document.getElementById('ship_eu').addEventListener('change', toggleZonePriceColumns);
 document.getElementById('ship_world').addEventListener('change', toggleZonePriceColumns);
 toggleZonePriceColumns();
+
+(function () {
+    const titleField = document.getElementById('title');
+    const slugField = document.getElementById('slug');
+    const slugPreview = document.getElementById('slug-preview');
+    let slugTouched = slugField.value.trim() !== '';
+
+    function slugify(value) {
+        return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+
+    function updatePreview() {
+        slugPreview.textContent = slugField.value.trim() !== '' ? slugField.value.trim() : '...';
+    }
+
+    slugField.addEventListener('input', function () {
+        slugTouched = slugField.value.trim() !== '';
+        updatePreview();
+    });
+
+    titleField.addEventListener('input', function () {
+        if (!slugTouched) {
+            slugField.value = slugify(titleField.value);
+            updatePreview();
+        }
+    });
+})();
 </script>
 
 <?php require __DIR__ . '/../partials/layout-end.php'; ?>

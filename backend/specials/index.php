@@ -74,10 +74,10 @@ require __DIR__ . '/../partials/layout-start.php';
                     <?php $status = specialStatusInfo($special); ?>
                     <tr>
                         <td>
-                            <?php if ($special['banner_path']): ?>
-                                <img src="<?= h(Config::appUrl()) ?>/assets/<?= h($special['banner_path']) ?>" alt="" style="width: 60px; height: 40px; object-fit: cover; border-radius: 4px;">
+                            <?php if ($special['banner_path'] && is_file(SPECIALS_ASSETS_PATH . '/' . $special['banner_path'])): ?>
+                                <img class="table-thumb" src="<?= h(Config::appUrl()) ?>/assets/<?= h($special['banner_path']) ?>" alt="">
                             <?php else: ?>
-                                &mdash;
+                                <div class="table-thumb"></div>
                             <?php endif; ?>
                         </td>
                         <td><?= h($special['title']) ?></td>
@@ -88,20 +88,26 @@ require __DIR__ . '/../partials/layout-start.php';
                         </td>
                         <td><?= (int) $special['variant_count'] ?></td>
                         <td><span class="badge <?= $status['class'] ?>"><?= h($status['label']) ?></span></td>
-                        <td class="actions">
-                            <a href="form.php?id=<?= (int) $special['id'] ?>">Bewerken</a>
-                            <form method="post" action="toggle-active.php" style="display: inline;">
-                                <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
-                                <input type="hidden" name="id" value="<?= (int) $special['id'] ?>">
-                                <input type="hidden" name="active" value="<?= (int) $special['active'] === 1 ? '0' : '1' ?>">
-                                <button type="submit" class="link-danger" style="color: var(--color-accent);"><?= (int) $special['active'] === 1 ? 'Zet uit' : 'Zet aan' ?></button>
-                            </form>
-                            <form method="post" action="delete.php" style="display: inline;"
-                                  onsubmit="return confirm('Weet je zeker dat je deze special wilt verwijderen? Dit kan niet ongedaan worden gemaakt.');">
-                                <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
-                                <input type="hidden" name="id" value="<?= (int) $special['id'] ?>">
-                                <button type="submit" class="link-danger">Verwijderen</button>
-                            </form>
+                        <td>
+                            <div class="actions-dropdown">
+                                <button type="button" class="icon-btn actions-trigger" title="Acties" aria-label="Acties">⋮</button>
+                                <div class="actions-menu">
+                                    <a href="<?= h(specialPublicUrl($special)) ?>" target="_blank" rel="noopener">👁️ Bekijk live</a>
+                                    <a href="form.php?id=<?= (int) $special['id'] ?>">✏️ Bewerken</a>
+                                    <form method="post" action="toggle-active.php">
+                                        <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
+                                        <input type="hidden" name="id" value="<?= (int) $special['id'] ?>">
+                                        <input type="hidden" name="active" value="<?= (int) $special['active'] === 1 ? '0' : '1' ?>">
+                                        <button type="submit"><?= (int) $special['active'] === 1 ? '🔕 Zet uit' : '🔔 Zet aan' ?></button>
+                                    </form>
+                                    <form method="post" action="delete.php"
+                                          onsubmit="return confirm('Weet je zeker dat je deze special wilt verwijderen? Dit kan niet ongedaan worden gemaakt.');">
+                                        <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
+                                        <input type="hidden" name="id" value="<?= (int) $special['id'] ?>">
+                                        <button type="submit" class="danger">🗑️ Verwijderen</button>
+                                    </form>
+                                </div>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>

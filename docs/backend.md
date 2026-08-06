@@ -80,3 +80,11 @@ INSERT INTO admin_users (username, password_hash, active) VALUES ('ewoud', '<has
   **Waarom:** zelfde probleem/oplossing als `kalender2027/` dat assets van
   `advent/` via `APP_URL` laadt in plaats van een relatief pad.
   **Datum:** 2026-08-06
+- **Beslissing:** actiekolommen in overzichtstabellen (bijv.
+  `backend/specials/index.php`) gebruiken een `⋮`-dropdown met icoon-labels
+  (`.actions-dropdown`/`.actions-menu`, `assets/js/actions-menu.js`) i.p.v.
+  losse tekstlinks/knoppen naast elkaar.
+  **Waarom:** overgenomen van `aniet.nl/backoffice` (bewezen patroon) - een
+  vast-breed enkel triggerknopje per rij voorkomt dat rijen met een
+  wisselend aantal/lengte acties niet verticaal uitlijnen.
+  **Datum:** 2026-08-06

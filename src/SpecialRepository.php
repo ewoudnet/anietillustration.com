@@ -98,18 +98,86 @@ final class SpecialRepository
              LIMIT 1"
         );
         $stmt->execute([$id]);
-        $special = $stmt->fetch();
 
+        return $this->attachOrderableVariants($stmt->fetch());
+    }
+
+    /**
+     * Zelfde als findOrderable(), maar via de deelbare slug (/specials/{slug}) i.p.v. het id.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findOrderableBySlug(string $slug): ?array
+    {
+        $pdo = Database::connection();
+        $stmt = $pdo->prepare(
+            "SELECT * FROM specials
+             WHERE slug = ? AND active = 1
+               AND (starts_at IS NULL OR starts_at <= NOW())
+               AND (ends_at IS NULL OR ends_at >= NOW())
+             LIMIT 1"
+        );
+        $stmt->execute([$slug]);
+
+        return $this->attachOrderableVariants($stmt->fetch());
+    }
+
+    /**
+     * @param array<string, mixed>|false $special
+     * @return array<string, mixed>|null
+     */
+    private function attachOrderableVariants(array|false $special): ?array
+    {
         if ($special === false) {
             return null;
         }
 
         $special['variants'] = array_values(array_filter(
-            $this->findVariants($id),
+            $this->findVariants((int) $special['id']),
             static fn (array $variant): bool => (int) $variant['active'] === 1
         ));
 
         return $special;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function findBySlug(string $slug): ?array
+    {
+        $pdo = Database::connection();
+        $stmt = $pdo->prepare('SELECT * FROM specials WHERE slug = ? LIMIT 1');
+        $stmt->execute([$slug]);
+        $special = $stmt->fetch();
+
+        return $special === false ? null : $special;
+    }
+
+    public function slugExists(string $slug, ?int $excludeId = null): bool
+    {
+        $pdo = Database::connection();
+
+        if ($excludeId !== null) {
+            $stmt = $pdo->prepare('SELECT 1 FROM specials WHERE slug = ? AND id != ? LIMIT 1');
+            $stmt->execute([$slug, $excludeId]);
+        } else {
+            $stmt = $pdo->prepare('SELECT 1 FROM specials WHERE slug = ? LIMIT 1');
+            $stmt->execute([$slug]);
+        }
+
+        return $stmt->fetch() !== false;
+    }
+
+    /**
+     * Zet een titel om naar een URL-vriendelijke slug: kleine letters, cijfers en
+     * koppeltekens, geen dubbele of rand-koppeltekens.
+     */
+    public static function slugify(string $value): string
+    {
+        $slug = strtolower(trim($value));
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug) ?? '';
+
+        return trim($slug, '-');
     }
 
     /**
@@ -123,11 +191,12 @@ final class SpecialRepository
 
         try {
             $stmt = $pdo->prepare(
-                'INSERT INTO specials (title, banner_path, description, active, ship_eu, ship_world, starts_at, ends_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO specials (title, slug, banner_path, description, active, ship_eu, ship_world, starts_at, ends_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $data['title'],
+                $data['slug'],
                 $data['banner_path'],
                 $data['description'],
                 $data['active'] ? 1 : 0,
@@ -160,11 +229,12 @@ final class SpecialRepository
 
         try {
             $stmt = $pdo->prepare(
-                'UPDATE specials SET title = ?, banner_path = ?, description = ?, active = ?, ship_eu = ?, ship_world = ?, starts_at = ?, ends_at = ?
+                'UPDATE specials SET title = ?, slug = ?, banner_path = ?, description = ?, active = ?, ship_eu = ?, ship_world = ?, starts_at = ?, ends_at = ?
                  WHERE id = ?'
             );
             $stmt->execute([
                 $data['title'],
+                $data['slug'],
                 $data['banner_path'],
                 $data['description'],
                 $data['active'] ? 1 : 0,

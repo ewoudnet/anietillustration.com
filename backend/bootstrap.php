@@ -48,6 +48,19 @@ function h(mixed $value): string
 }
 
 /**
+ * Live, publieke URL van een special (t.b.v. "bekijk live"-links in de backend), via de
+ * deelbare slug als die er is, anders het ?s={id}-fallbackformaat.
+ *
+ * @param array<string, mixed> $special
+ */
+function specialPublicUrl(array $special): string
+{
+    return !empty($special['slug'])
+        ? Config::publicUrl() . '/' . $special['slug']
+        : Config::publicUrl() . '/?s=' . (int) $special['id'];
+}
+
+/**
  * Root-relative URL-pad naar backend/, onafhankelijk van submap-diepte (nodig omdat
  * secties elkaar cross-directory linken, bijv. vanuit backend/specials/ naar een
  * toekomstige backend/products/). Werkt zowel lokaal (php -S -t backend, geeft '')

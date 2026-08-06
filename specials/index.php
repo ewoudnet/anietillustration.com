@@ -9,8 +9,18 @@ use App\Csrf;
 use App\SpecialRepository;
 
 $repository = new SpecialRepository();
+$slug = isset($_GET['slug']) ? trim((string) $_GET['slug']) : '';
 $specialId = isset($_GET['s']) ? (int) $_GET['s'] : null;
-$special = $specialId !== null ? $repository->findOrderable($specialId) : null;
+
+if ($slug !== '') {
+    $special = $repository->findOrderableBySlug($slug);
+} elseif ($specialId !== null) {
+    $special = $repository->findOrderable($specialId);
+} else {
+    $special = null;
+}
+
+$notFound = ($slug !== '' || $specialId !== null) && $special === null;
 
 $errors = $_SESSION['flash_errors'] ?? [];
 $old = $_SESSION['flash_old'] ?? [];
@@ -32,6 +42,14 @@ function formatEuro(?int $cents): string
 {
     return $cents !== null ? number_format($cents / 100, 2, ',', '.') : '-';
 }
+
+/**
+ * @param array<string, mixed> $item
+ */
+function specialUrl(array $item): string
+{
+    return !empty($item['slug']) ? $item['slug'] : 'index.php?s=' . (int) $item['id'];
+}
 ?>
 <!doctype html>
 <html lang="nl">
@@ -49,7 +67,7 @@ function formatEuro(?int $cents): string
         </div>
     <?php endif; ?>
 
-    <?php if ($specialId !== null && $special === null): ?>
+    <?php if ($notFound): ?>
         <div class="card">
             <div class="alert alert-error">Deze special is niet (meer) beschikbaar.</div>
             <p><a href="index.php">&larr; Terug naar het overzicht</a></p>
@@ -228,7 +246,7 @@ function formatEuro(?int $cents): string
         <?php else: ?>
             <div class="special-grid">
                 <?php foreach ($active as $item): ?>
-                    <a class="special-tile" href="index.php?s=<?= (int) $item['id'] ?>">
+                    <a class="special-tile" href="<?= h(specialUrl($item)) ?>">
                         <?php if ($item['banner_path']): ?>
                             <img src="assets/<?= h($item['banner_path']) ?>" alt="">
                         <?php endif; ?>

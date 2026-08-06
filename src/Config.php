@@ -43,4 +43,14 @@ final class Config
     {
         return rtrim(self::get('APP_URL', 'http://localhost:8000') ?? '', '/');
     }
+
+    /**
+     * De echte, live specials-URL zoals klanten hem zien - onafhankelijk van APP_URL (dat
+     * per omgeving verschilt: lokaal :8002, later de live submap). Gebruikt door de backend
+     * voor "bekijk live"-links, zodat die nooit naar localhost wijzen.
+     */
+    public static function publicUrl(): string
+    {
+        return rtrim(self::get('PUBLIC_URL', 'https://aniet.nl/specials') ?? '', '/');
+    }
 }
