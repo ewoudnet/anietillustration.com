@@ -20,8 +20,19 @@ jobs:
       - name: Composer install (productie)
         run: composer install --no-dev --optimize-autoloader --no-progress
 
-      - name: Vendor-map afschermen
-        run: cp deploy-htaccess-core.txt vendor/.htaccess
+      - name: src/vendor/logs isoleren in anietillustration-core/
+        # We deployen naar de root van public_html (naast bestaande, losstaande projecten
+        # als backoffice/ en advent/ met hun eigen "*-core"-sibling-map). src/ en vendor/
+        # mogen daarom NOOIT als vendor/ of src/ in die root belanden: dat zijn generieke
+        # namen die de "sibling van public/"-fallback-candidate van die andere projecten'
+        # eigen bootstrap.php's shaduwen (dezelfde candidate-zoeklogica als hieronder),
+        # waardoor die andere sites hun eigen klassen niet meer vinden. Verplaatsen naar de
+        # eigen, uniek genoemde anietillustration-core/ voorkomt dat en matcht candidate 2
+        # in backend/bootstrap.php en specials/bootstrap.php.
+        run: |
+          mkdir -p anietillustration-core
+          mv src vendor logs anietillustration-core/
+          cp deploy-htaccess-core.txt anietillustration-core/.htaccess
 
       - name: SFTP deploy
         env:
