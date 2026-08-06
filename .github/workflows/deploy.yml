@@ -32,7 +32,7 @@ jobs:
           cat > deploy.lftp <<EOF
           set sftp:auto-confirm yes
           open -u "$SFTP_USER","$SFTP_PASS" sftp://ftp.aniet.nl:22
-          mirror -R --verbose --exclude-glob .git/ --exclude-glob .github/ --exclude-glob .claude/ --exclude-glob docs/ --exclude-glob sql/ --exclude-glob "*.log" --exclude-glob .env --exclude-glob .env.example --exclude-glob CLAUDE.md --exclude-glob composer.json --exclude-glob composer.lock --exclude-glob deploy-htaccess-core.txt --exclude-glob "README*" ./ anietillustration.com/
+          mirror -R --verbose --exclude-glob .git/ --exclude-glob .github/ --exclude-glob .claude/ --exclude-glob docs/ --exclude-glob sql/ --exclude-glob "*.log" --exclude-glob .env --exclude-glob .env.example --exclude-glob CLAUDE.md --exclude-glob composer.json --exclude-glob composer.lock --exclude-glob deploy-htaccess-core.txt --exclude-glob "README*" ./ .
           bye
           EOF
           lftp -f deploy.lftp
