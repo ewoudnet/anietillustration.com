@@ -8,7 +8,7 @@ use App\Auth;
 use App\Csrf;
 use App\SpecialRepository;
 
-Auth::requireLogin();
+Auth::requireSection('specials');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !Csrf::verify($_POST['csrf_token'] ?? null)) {
     header('Location: index.php');

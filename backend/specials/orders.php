@@ -9,7 +9,7 @@ use App\AdventOrderRepository;
 use App\OrderRepository;
 use App\SpecialRepository;
 
-Auth::requireLogin();
+Auth::requireSection('specials');
 
 $filters = [
     'q' => trim((string) ($_GET['q'] ?? '')),
@@ -49,6 +49,48 @@ function orderBadgeClass(string $status): string
         default => 'badge-open',
     };
 }
+
+const ORDERS_PER_PAGE = 25;
+
+/**
+ * @param array<int, array<string,mixed>> $items
+ * @return array{0: array<int, array<string,mixed>>, 1: int, 2: int}
+ */
+function paginate(array $items, string $pageParam): array
+{
+    $totalPages = max(1, (int) ceil(count($items) / ORDERS_PER_PAGE));
+    $page = min($totalPages, max(1, (int) ($_GET[$pageParam] ?? 1)));
+
+    return [array_slice($items, ($page - 1) * ORDERS_PER_PAGE, ORDERS_PER_PAGE), $page, $totalPages];
+}
+
+function renderOrdersPagination(string $pageParam, int $currentPage, int $totalPages): void
+{
+    if ($totalPages <= 1) {
+        return;
+    }
+
+    $params = $_GET;
+    $buildUrl = static function (int $page) use ($params, $pageParam): string {
+        $params[$pageParam] = $page;
+
+        return 'orders.php?' . http_build_query($params);
+    };
+    ?>
+    <div class="pagination">
+        <?php if ($currentPage > 1): ?>
+            <a href="<?= h($buildUrl($currentPage - 1)) ?>" class="btn btn-secondary" style="width: auto;">&laquo; Vorige</a>
+        <?php endif; ?>
+        <span class="pagination-info">Pagina <?= $currentPage ?> van <?= $totalPages ?></span>
+        <?php if ($currentPage < $totalPages): ?>
+            <a href="<?= h($buildUrl($currentPage + 1)) ?>" class="btn btn-secondary" style="width: auto;">Volgende &raquo;</a>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+
+[$pagedOrders, $ordersPage, $ordersTotalPages] = paginate($orders, 'page');
+[$pagedAdventOrders, $adventPage, $adventTotalPages] = paginate($adventOrders, 'advent_page');
 
 $exportQuery = http_build_query($filters);
 
@@ -136,7 +178,7 @@ require __DIR__ . '/../partials/layout-start.php';
                 </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($orders as $order): ?>
+                <?php foreach ($pagedOrders as $order): ?>
                     <tr>
                         <td><?= h($order['order_reference']) ?></td>
                         <td><?= h($order['special_title'] ?? '—') ?></td>
@@ -154,6 +196,7 @@ require __DIR__ . '/../partials/layout-start.php';
                 </tbody>
             </table>
         </div>
+        <?php renderOrdersPagination('page', $ordersPage, $ordersTotalPages); ?>
     <?php endif; ?>
 </div>
 
@@ -183,7 +226,7 @@ require __DIR__ . '/../partials/layout-start.php';
                 </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($adventOrders as $order): ?>
+                <?php foreach ($pagedAdventOrders as $order): ?>
                     <tr>
                         <td><?= h($order['order_reference']) ?></td>
                         <td><?= h($adventTypeLabels[$order['product_type']] ?? ucfirst($order['product_type'])) ?></td>
@@ -200,6 +243,7 @@ require __DIR__ . '/../partials/layout-start.php';
                 </tbody>
             </table>
         </div>
+        <?php renderOrdersPagination('advent_page', $adventPage, $adventTotalPages); ?>
     <?php endif; ?>
 </div>
 <?php require __DIR__ . '/../partials/layout-end.php'; ?>

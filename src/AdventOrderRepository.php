@@ -19,7 +19,7 @@ final class AdventOrderRepository
 
     public function __construct()
     {
-        $this->db = Database::connection();
+        $this->db = SpecialsDatabase::connection();
     }
 
     /**

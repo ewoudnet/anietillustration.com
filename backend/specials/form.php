@@ -10,7 +10,7 @@ use App\Csrf;
 use App\ImageUpload;
 use App\SpecialRepository;
 
-Auth::requireLogin();
+Auth::requireSection('specials');
 
 $repository = new SpecialRepository();
 $id = isset($_GET['id']) ? (int) $_GET['id'] : (isset($_POST['id']) ? (int) $_POST['id'] : null);

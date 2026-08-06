@@ -11,7 +11,7 @@ final class SpecialRepository
      */
     public function findAll(): array
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->query(
             'SELECT s.*, (SELECT COUNT(*) FROM special_price_variants v WHERE v.special_id = s.id) AS variant_count
              FROM specials s
@@ -26,7 +26,7 @@ final class SpecialRepository
      */
     public function find(int $id): ?array
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->prepare('SELECT * FROM specials WHERE id = ? LIMIT 1');
         $stmt->execute([$id]);
         $special = $stmt->fetch();
@@ -39,7 +39,7 @@ final class SpecialRepository
      */
     public function findVariants(int $specialId): array
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->prepare('SELECT * FROM special_price_variants WHERE special_id = ? ORDER BY sort_order, id');
         $stmt->execute([$specialId]);
 
@@ -53,7 +53,7 @@ final class SpecialRepository
      */
     public function findPublicActive(): array
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->query(
             "SELECT * FROM specials
              WHERE active = 1
@@ -72,7 +72,7 @@ final class SpecialRepository
      */
     public function findPublicExpired(): array
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->query(
             "SELECT * FROM specials
              WHERE active = 1 AND ends_at IS NOT NULL AND ends_at < NOW()
@@ -89,7 +89,7 @@ final class SpecialRepository
      */
     public function findOrderable(int $id): ?array
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->prepare(
             "SELECT * FROM specials
              WHERE id = ? AND active = 1
@@ -109,7 +109,7 @@ final class SpecialRepository
      */
     public function findOrderableBySlug(string $slug): ?array
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->prepare(
             "SELECT * FROM specials
              WHERE slug = ? AND active = 1
@@ -145,7 +145,7 @@ final class SpecialRepository
      */
     public function findBySlug(string $slug): ?array
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->prepare('SELECT * FROM specials WHERE slug = ? LIMIT 1');
         $stmt->execute([$slug]);
         $special = $stmt->fetch();
@@ -155,7 +155,7 @@ final class SpecialRepository
 
     public function slugExists(string $slug, ?int $excludeId = null): bool
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
 
         if ($excludeId !== null) {
             $stmt = $pdo->prepare('SELECT 1 FROM specials WHERE slug = ? AND id != ? LIMIT 1');
@@ -186,7 +186,7 @@ final class SpecialRepository
      */
     public function create(array $data, array $variants): int
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $pdo->beginTransaction();
 
         try {
@@ -224,7 +224,7 @@ final class SpecialRepository
      */
     public function update(int $id, array $data, array $variants): void
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $pdo->beginTransaction();
 
         try {
@@ -263,7 +263,7 @@ final class SpecialRepository
      */
     private function saveVariants(int $specialId, array $variants): void
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
 
         $delete = $pdo->prepare('DELETE FROM special_price_variants WHERE special_id = ?');
         $delete->execute([$specialId]);
@@ -287,14 +287,14 @@ final class SpecialRepository
 
     public function setActive(int $id, bool $active): void
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->prepare('UPDATE specials SET active = ? WHERE id = ?');
         $stmt->execute([$active ? 1 : 0, $id]);
     }
 
     public function delete(int $id): void
     {
-        $pdo = Database::connection();
+        $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->prepare('DELETE FROM specials WHERE id = ?');
         $stmt->execute([$id]);
     }

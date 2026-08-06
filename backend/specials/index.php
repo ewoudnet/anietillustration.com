@@ -9,7 +9,7 @@ use App\Config;
 use App\Csrf;
 use App\SpecialRepository;
 
-Auth::requireLogin();
+Auth::requireSection('specials');
 
 $csrfToken = Csrf::token();
 $specials = (new SpecialRepository())->findAll();

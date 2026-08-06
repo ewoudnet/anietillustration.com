@@ -8,7 +8,7 @@ use App\Auth;
 use App\OrderRepository;
 use App\XlsxWriter;
 
-Auth::requireLogin();
+Auth::requireSection('specials');
 
 $filters = [
     'q' => trim((string) ($_GET['q'] ?? '')),

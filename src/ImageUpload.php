@@ -123,4 +123,28 @@ final class ImageUpload
             @unlink($fullPath);
         }
     }
+
+    /**
+     * Kopieert een bestaande upload naar een nieuw bestand (nieuwe willekeurige naam,
+     * zelfde submap). Gebruikt bij het dupliceren van een kaart/product, zodat de twee
+     * niet naar hetzelfde fysieke bestand verwijzen (anders zou het verwijderen/vervangen
+     * van de afbeelding bij de ene ook de andere raken).
+     */
+    public static function copy(?string $relativePath, string $assetsBasePath): ?string
+    {
+        if ($relativePath === null || $relativePath === '') {
+            return null;
+        }
+
+        $sourcePath = $assetsBasePath . '/' . $relativePath;
+        if (!is_file($sourcePath)) {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
+        $newRelativePath = dirname($relativePath) . '/' . bin2hex(random_bytes(16)) . '.' . $extension;
+        $targetPath = $assetsBasePath . '/' . $newRelativePath;
+
+        return copy($sourcePath, $targetPath) ? $newRelativePath : null;
+    }
 }
