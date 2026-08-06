@@ -32,7 +32,7 @@ $status = $order['status'] ?? null;
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Bestelling <?= $order ? h($order['order_reference']) : '' ?></title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body>
 <div class="page">

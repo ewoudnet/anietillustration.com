@@ -34,7 +34,7 @@ $menu = [
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= h($pageTitle) ?> - Backend</title>
-    <link rel="stylesheet" href="<?= h(BACKEND_BASE) ?>/assets/css/style.css">
+    <link rel="stylesheet" href="<?= h(BACKEND_BASE) ?>/assets/css/style.css?v=<?= filemtime(dirname(__DIR__) . '/assets/css/style.css') ?>">
 </head>
 <body>
 <div class="app-shell">
