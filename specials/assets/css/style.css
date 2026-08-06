@@ -60,8 +60,30 @@ h1, h2, h3, legend {
     display: block;
     width: 100%;
     border-radius: var(--radius);
-    margin-bottom: 16px;
+    margin-bottom: 20px;
     box-shadow: 0 12px 30px rgba(228, 80, 140, 0.25);
+}
+
+.intro-card {
+    background: var(--color-pink-band);
+    border-radius: var(--radius);
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    color: var(--color-navy);
+    line-height: 1.6;
+}
+
+.intro-card h2 {
+    margin-top: 0;
+    color: var(--color-accent-dark);
+}
+
+.intro-card p {
+    margin: 0 0 14px;
+}
+
+.intro-card p:last-child {
+    margin-bottom: 0;
 }
 
 .card {
@@ -77,6 +99,19 @@ h1, h2, h3, legend {
 
 .card h2 {
     margin-top: 0;
+    color: var(--color-accent-dark);
+}
+
+fieldset {
+    border: none;
+    padding: 0;
+    margin: 0 0 20px;
+}
+
+legend {
+    font-weight: 600;
+    font-size: 1.05rem;
+    margin-bottom: 12px;
     color: var(--color-accent-dark);
 }
 
@@ -264,6 +299,10 @@ h1, h2, h3, legend {
 
     .card {
         padding: 20px;
+    }
+
+    .intro-card {
+        padding: 18px 20px;
     }
 
     .header h1 {

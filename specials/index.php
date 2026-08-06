@@ -43,9 +43,11 @@ function formatEuro(?int $cents): string
 </head>
 <body>
 <div class="page">
-    <div class="header">
-        <h1>🎁 Aniet Illustration</h1>
-    </div>
+    <?php if ($special === null): ?>
+        <div class="header">
+            <h1>🎁 Aniet Illustration</h1>
+        </div>
+    <?php endif; ?>
 
     <?php if ($specialId !== null && $special === null): ?>
         <div class="card">
@@ -54,15 +56,18 @@ function formatEuro(?int $cents): string
         </div>
 
     <?php elseif ($special !== null): ?>
-        <div class="card">
-            <?php if ($special['banner_path']): ?>
-                <img class="banner" src="assets/<?= h($special['banner_path']) ?>" alt="">
-            <?php endif; ?>
+        <?php if ($special['banner_path']): ?>
+            <img class="banner" src="assets/<?= h($special['banner_path']) ?>" alt="">
+        <?php endif; ?>
+
+        <div class="intro-card">
             <h2><?= h($special['title']) ?></h2>
             <?php if ($special['description']): ?>
                 <p><?= nl2br(h($special['description'])) ?></p>
             <?php endif; ?>
+        </div>
 
+        <div class="card">
             <?php foreach ($errors as $error): ?>
                 <div class="alert alert-error"><?= h($error) ?></div>
             <?php endforeach; ?>
@@ -74,79 +79,85 @@ function formatEuro(?int $cents): string
                     <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
                     <input type="hidden" name="special_id" value="<?= (int) $special['id'] ?>">
 
-                    <div class="field">
-                        <label>Keuze</label>
-                        <?php foreach ($special['variants'] as $variant): ?>
-                            <label class="variant-option">
-                                <input type="radio" name="price_variant_id" value="<?= (int) $variant['id'] ?>"
-                                    <?= (string) ($old['price_variant_id'] ?? '') === (string) $variant['id'] ? 'checked' : '' ?> required>
-                                <?= h($variant['label']) ?> &mdash; €<span class="variant-price" data-variant-id="<?= (int) $variant['id'] ?>"><?= h(formatEuro((int) $variant['price_nl_cents'])) ?></span>
-                            </label>
-                        <?php endforeach; ?>
-                    </div>
+                    <fieldset>
+                        <legend>Jouw gegevens</legend>
+                        <div class="row">
+                            <div class="field">
+                                <label for="first_name">Voornaam *</label>
+                                <input type="text" id="first_name" name="first_name" required value="<?= h($old['first_name'] ?? '') ?>">
+                            </div>
+                            <div class="field">
+                                <label for="last_name">Achternaam *</label>
+                                <input type="text" id="last_name" name="last_name" required value="<?= h($old['last_name'] ?? '') ?>">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="email">E-mailadres *</label>
+                            <input type="email" id="email" name="email" required value="<?= h($old['email'] ?? '') ?>">
+                        </div>
+                    </fieldset>
 
-                    <div class="field">
-                        <label for="quantity">Aantal</label>
-                        <input type="number" id="quantity" name="quantity" min="1" max="20" value="<?= h($old['quantity'] ?? '1') ?>" required>
-                    </div>
+                    <fieldset>
+                        <legend>Verzendadres</legend>
+                        <div class="row">
+                            <div class="field" style="flex: 2 1 220px;">
+                                <label for="street">Straatnaam *</label>
+                                <input type="text" id="street" name="street" required value="<?= h($old['street'] ?? '') ?>">
+                            </div>
+                            <div class="field" style="flex: 1 1 100px;">
+                                <label for="house_number">Huisnr. *</label>
+                                <input type="text" id="house_number" name="house_number" required value="<?= h($old['house_number'] ?? '') ?>">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="field" style="flex: 1 1 140px;">
+                                <label for="postal_code">Postcode *</label>
+                                <input type="text" id="postal_code" name="postal_code" required value="<?= h($old['postal_code'] ?? '') ?>">
+                            </div>
+                            <div class="field" style="flex: 1 1 200px;">
+                                <label for="city">Plaats *</label>
+                                <input type="text" id="city" name="city" required value="<?= h($old['city'] ?? '') ?>">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="country_code">Land *</label>
+                            <select id="country_code" name="country_code" required>
+                                <?php foreach ($countries as $code => $name): ?>
+                                    <option value="<?= h($code) ?>" <?= ($old['country_code'] ?? 'NL') === $code ? 'selected' : '' ?>><?= h($name) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </fieldset>
 
-                    <div class="summary" id="summary">
-                        <div class="summary-row">
-                            <span>Prijs per stuk (<span id="summary-qty">1</span>x)</span>
-                            <span>€<span id="summary-unit-price">0,00</span></span>
-                        </div>
-                        <div class="summary-row total">
-                            <span>Totaal</span>
-                            <span>€<span id="summary-total">0,00</span></span>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="field" style="flex: 1 1 200px;">
-                            <label for="first_name">Voornaam</label>
-                            <input type="text" id="first_name" name="first_name" required value="<?= h($old['first_name'] ?? '') ?>">
-                        </div>
-                        <div class="field" style="flex: 1 1 200px;">
-                            <label for="last_name">Achternaam</label>
-                            <input type="text" id="last_name" name="last_name" required value="<?= h($old['last_name'] ?? '') ?>">
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="field" style="flex: 2 1 220px;">
-                            <label for="street">Straatnaam</label>
-                            <input type="text" id="street" name="street" required value="<?= h($old['street'] ?? '') ?>">
-                        </div>
-                        <div class="field" style="flex: 1 1 100px;">
-                            <label for="house_number">Huisnr.</label>
-                            <input type="text" id="house_number" name="house_number" required value="<?= h($old['house_number'] ?? '') ?>">
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="field" style="flex: 1 1 140px;">
-                            <label for="postal_code">Postcode</label>
-                            <input type="text" id="postal_code" name="postal_code" required value="<?= h($old['postal_code'] ?? '') ?>">
-                        </div>
-                        <div class="field" style="flex: 1 1 200px;">
-                            <label for="city">Plaats</label>
-                            <input type="text" id="city" name="city" required value="<?= h($old['city'] ?? '') ?>">
-                        </div>
-                    </div>
-
-                    <div class="field">
-                        <label for="country_code">Land</label>
-                        <select id="country_code" name="country_code" required>
-                            <?php foreach ($countries as $code => $name): ?>
-                                <option value="<?= h($code) ?>" <?= ($old['country_code'] ?? 'NL') === $code ? 'selected' : '' ?>><?= h($name) ?></option>
+                    <fieldset>
+                        <legend>Bestelling</legend>
+                        <div class="field">
+                            <label>Keuze *</label>
+                            <?php foreach ($special['variants'] as $variant): ?>
+                                <label class="variant-option">
+                                    <input type="radio" name="price_variant_id" value="<?= (int) $variant['id'] ?>"
+                                        <?= (string) ($old['price_variant_id'] ?? '') === (string) $variant['id'] ? 'checked' : '' ?> required>
+                                    <?= h($variant['label']) ?> &mdash; €<span class="variant-price" data-variant-id="<?= (int) $variant['id'] ?>"><?= h(formatEuro((int) $variant['price_nl_cents'])) ?></span>
+                                </label>
                             <?php endforeach; ?>
-                        </select>
-                    </div>
+                        </div>
 
-                    <div class="field">
-                        <label for="email">E-mailadres</label>
-                        <input type="email" id="email" name="email" required value="<?= h($old['email'] ?? '') ?>">
-                    </div>
+                        <div class="field" style="max-width: 160px;">
+                            <label for="quantity">Aantal *</label>
+                            <input type="number" id="quantity" name="quantity" min="1" max="20" value="<?= h($old['quantity'] ?? '1') ?>" required>
+                        </div>
+
+                        <div class="summary" id="summary">
+                            <div class="summary-row">
+                                <span>Prijs per stuk (<span id="summary-qty">1</span>x)</span>
+                                <span>€<span id="summary-unit-price">0,00</span></span>
+                            </div>
+                            <div class="summary-row total">
+                                <span>Totaal</span>
+                                <span>€<span id="summary-total">0,00</span></span>
+                            </div>
+                        </div>
+                    </fieldset>
 
                     <button type="submit" class="btn">Bestellen &amp; betalen</button>
                 </form>
@@ -204,6 +215,8 @@ function formatEuro(?int $cents): string
                 </script>
             <?php endif; ?>
         </div>
+
+        <p class="footer-note">Je gegevens worden alleen gebruikt om je bestelling te verwerken en te verzenden.</p>
 
     <?php else: ?>
         <?php $active = $repository->findPublicActive(); ?>
