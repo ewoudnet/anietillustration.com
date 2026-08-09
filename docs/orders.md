@@ -12,7 +12,9 @@ specials-orders; in de wholesale-fase uitgebreid met wholesale-orders
   (nu alleen `special`), adaptatie van de gelijknamige klassen in
   `adventskaarten-bestellen/src`
 - `backend/specials/orders.php` — overzicht + filter (zoeken, status,
-  special)
+  special) + acties-dropdown (bewerken/verwijderen)
+- `backend/specials/order-form.php` / `order-delete.php` — bewerken en
+  soft-deleten van een order, naar voorbeeld `adventskaarten-bestellen`
 - `backend/specials/orders-export.php` — Excel-export van de gefilterde set
   (`src/XlsxWriter.php`, dependency-vrij via `ZipArchive`)
 - `specials/process-order.php` / `webhook.php` / `success.php` — publieke
@@ -24,6 +26,10 @@ specials-orders; in de wholesale-fase uitgebreid met wholesale-orders
   `adventskaarten-bestellen`-systeem) onderaan hetzelfde orderoverzicht —
   `src/AdventOrderRepository.php`, geen filter/export
 - [x] Excel-export van gefilterde orders
+- [x] Order bewerken (klantgegevens, adres, aantal, prijs, status, notities)
+  en soft-deleten (`deleted_at`, blijft in de database t.b.v. boekhouding/
+  Mollie-historie, verdwijnt uit alle overzichten/statistieken) — naar
+  voorbeeld `adventskaarten-bestellen`
 - [x] Mollie-betaalflow + webhook (naar voorbeeld `/advent`)
 - [x] Bevestigingsmail bij betaling (PHPMailer), idempotent via
   `confirmation_email_sent_at`
@@ -41,6 +47,15 @@ foutafhandeling vangt dit netjes op) → order zichtbaar + filterbaar in
 (geldig .xlsx, juiste kolommen/inhoud).
 
 ## Beslissingen & rationale
+- **Beslissing:** bewerken van een order past alleen klant-/adresgegevens,
+  aantal, prijs per stuk, status en notities aan (special en variant-label
+  wel wijzigbaar, maar niet gekoppeld aan een live prijsvariant-selector).
+  **Waarom:** orders bewaren al een eigen snapshot (`variant_label`/
+  `unit_price_cents`) los van `special_price_variants` (zie
+  `SpecialRepository::saveVariants()`) — een variant-picker zou die snapshot
+  weer aan een levende rij koppelen en kan achteraf inconsistent worden als
+  de special ondertussen is aangepast.
+  **Datum:** 2026-08-09
 - **Beslissing:** één centraal ordersysteem voor specials én (later)
   wholesale, met een kolom/type om onderscheid te maken.
   **Waarom:** zelfde patroon als `adventskaarten-bestellen`, dat advent en

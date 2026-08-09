@@ -78,5 +78,6 @@ $sectionEntryPages = [
         <a href="<?= h(BACKEND_BASE) ?>/specials/index.php" class="<?= $activePage === 'index' ? 'active' : '' ?>">Overzicht</a>
         <a href="<?= h(BACKEND_BASE) ?>/specials/form.php" class="<?= $activePage === 'form' ? 'active' : '' ?>">+ Nieuwe special</a>
         <a href="<?= h(BACKEND_BASE) ?>/specials/orders.php" class="<?= $activePage === 'orders' ? 'active' : '' ?>">Bestellingen</a>
+        <a href="<?= h(BACKEND_BASE) ?>/specials/stats.php" class="<?= $activePage === 'stats' ? 'active' : '' ?>">Statistieken</a>
     </nav>
 <?php endif; ?>

@@ -60,9 +60,11 @@ CREATE TABLE IF NOT EXISTS orders (
     currency CHAR(3) NOT NULL DEFAULT 'EUR',
     status ENUM('open', 'paid', 'failed', 'expired', 'canceled') NOT NULL DEFAULT 'open',
     source ENUM('online', 'manual') NOT NULL DEFAULT 'online',
+    traffic_source VARCHAR(100) DEFAULT NULL,
     notes TEXT DEFAULT NULL,
     mollie_payment_id VARCHAR(50) DEFAULT NULL,
     confirmation_email_sent_at DATETIME DEFAULT NULL,
+    deleted_at DATETIME DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -71,4 +73,22 @@ CREATE TABLE IF NOT EXISTS orders (
     KEY idx_special_id (special_id),
     KEY idx_order_type (order_type),
     CONSTRAINT fk_order_special FOREIGN KEY (special_id) REFERENCES specials (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS page_views (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    visited_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    path VARCHAR(255) NOT NULL,
+    special_id INT UNSIGNED DEFAULT NULL,
+    referrer VARCHAR(255) DEFAULT NULL,
+    utm_source VARCHAR(100) DEFAULT NULL,
+    utm_medium VARCHAR(100) DEFAULT NULL,
+    utm_campaign VARCHAR(100) DEFAULT NULL,
+    source VARCHAR(100) NOT NULL,
+    session_id VARCHAR(64) NOT NULL,
+    PRIMARY KEY (id),
+    KEY idx_visited_at (visited_at),
+    KEY idx_source (source),
+    KEY idx_session_id (session_id),
+    KEY idx_special_id (special_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

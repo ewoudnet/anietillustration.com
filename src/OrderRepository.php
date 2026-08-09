@@ -45,6 +45,7 @@ final class OrderRepository
             'currency' => 'EUR',
             'status' => 'open',
             'source' => 'online',
+            'traffic_source' => TrafficSource::currentSource(),
             'notes' => null,
         ]);
 
@@ -59,6 +60,7 @@ final class OrderRepository
         $stmt = $this->db->query(
             'SELECT o.*, s.title AS special_title FROM orders o
              LEFT JOIN specials s ON s.id = o.special_id
+             WHERE o.deleted_at IS NULL
              ORDER BY o.created_at DESC'
         );
 
@@ -71,7 +73,7 @@ final class OrderRepository
      */
     public function search(array $filters): array
     {
-        $where = [];
+        $where = ['o.deleted_at IS NULL'];
         $params = [];
 
         $q = trim((string) ($filters['q'] ?? ''));
@@ -158,6 +160,99 @@ final class OrderRepository
     {
         $stmt = $this->db->prepare('UPDATE orders SET confirmation_email_sent_at = NOW() WHERE id = :id');
         $stmt->execute(['id' => $orderId]);
+    }
+
+    /**
+     * @param array{specialId:?int,variantLabel:?string,firstName:string,lastName:string,street:string,houseNumber:string,postalCode:string,city:string,countryCode:string,email:string,quantity:int,unitPriceCents:int,status:string,notes:?string} $input
+     */
+    public function update(int $orderId, array $input): void
+    {
+        $totalCents = $input['unitPriceCents'] * $input['quantity'];
+
+        $stmt = $this->db->prepare(
+            'UPDATE orders SET
+                special_id = :special_id,
+                variant_label = :variant_label,
+                first_name = :first_name,
+                last_name = :last_name,
+                street = :street,
+                house_number = :house_number,
+                postal_code = :postal_code,
+                city = :city,
+                country_code = :country_code,
+                email = :email,
+                quantity = :quantity,
+                unit_price_cents = :unit_price_cents,
+                total_amount_cents = :total_amount_cents,
+                status = :status,
+                notes = :notes
+             WHERE id = :id'
+        );
+
+        $stmt->execute([
+            'special_id' => $input['specialId'],
+            'variant_label' => $input['variantLabel'],
+            'first_name' => $input['firstName'],
+            'last_name' => $input['lastName'],
+            'street' => $input['street'],
+            'house_number' => $input['houseNumber'],
+            'postal_code' => $input['postalCode'],
+            'city' => $input['city'],
+            'country_code' => strtoupper($input['countryCode']),
+            'email' => $input['email'],
+            'quantity' => $input['quantity'],
+            'unit_price_cents' => $input['unitPriceCents'],
+            'total_amount_cents' => $totalCents,
+            'status' => $input['status'],
+            'notes' => $input['notes'],
+            'id' => $orderId,
+        ]);
+    }
+
+    /**
+     * Soft delete - de order blijft in de database staan (o.a. voor de boekhouding/Mollie-
+     * historie) maar verdwijnt uit alle overzichten en statistieken.
+     */
+    public function delete(int $orderId): void
+    {
+        $stmt = $this->db->prepare('UPDATE orders SET deleted_at = NOW() WHERE id = :id');
+        $stmt->execute(['id' => $orderId]);
+    }
+
+    /**
+     * Bron-overzicht: bestellingen, betaalde bestellingen en omzet per bron, binnen een periode.
+     *
+     * @return array<int, array<string,mixed>>
+     */
+    public function statsBySource(?string $since = null, ?int $specialId = null): array
+    {
+        $params = ['source' => 'online'];
+        $dateFilter = '';
+        if ($since !== null) {
+            $dateFilter = ' AND created_at >= :since';
+            $params['since'] = $since;
+        }
+
+        $specialFilter = '';
+        if ($specialId !== null) {
+            $specialFilter = ' AND special_id = :special_id';
+            $params['special_id'] = $specialId;
+        }
+
+        $stmt = $this->db->prepare(
+            "SELECT
+                COALESCE(traffic_source, 'Onbekend') AS traffic_source,
+                COUNT(*) AS orders,
+                SUM(status = 'paid') AS paid_orders,
+                SUM(CASE WHEN status = 'paid' THEN total_amount_cents ELSE 0 END) AS paid_revenue_cents
+             FROM orders
+             WHERE source = :source AND deleted_at IS NULL{$dateFilter}{$specialFilter}
+             GROUP BY traffic_source
+             ORDER BY orders DESC"
+        );
+        $stmt->execute($params);
+
+        return $stmt->fetchAll();
     }
 
     /**

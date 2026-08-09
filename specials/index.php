@@ -6,7 +6,9 @@ require __DIR__ . '/bootstrap.php';
 
 use App\Countries;
 use App\Csrf;
+use App\PageViewRepository;
 use App\SpecialRepository;
+use App\TrafficSource;
 
 $repository = new SpecialRepository();
 $slug = isset($_GET['slug']) ? trim((string) $_GET['slug']) : '';
@@ -36,6 +38,15 @@ if ($special !== null) {
     foreach (array_keys($countries) as $code) {
         $countryZones[$code] = Countries::zoneFor($code);
     }
+}
+
+if (!TrafficSource::isLikelyBot()) {
+    $resolvedSource = TrafficSource::resolve();
+    (new PageViewRepository())->log(
+        (string) ($_SERVER['REQUEST_URI'] ?? '/'),
+        $resolvedSource,
+        $special !== null ? (int) $special['id'] : null
+    );
 }
 
 function formatEuro(?int $cents): string

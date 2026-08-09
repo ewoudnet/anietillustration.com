@@ -6,10 +6,13 @@ require __DIR__ . '/../bootstrap.php';
 
 use App\Auth;
 use App\AdventOrderRepository;
+use App\Csrf;
 use App\OrderRepository;
 use App\SpecialRepository;
 
 Auth::requireSection('specials');
+
+$csrfToken = Csrf::token();
 
 $filters = [
     'q' => trim((string) ($_GET['q'] ?? '')),
@@ -104,6 +107,12 @@ require __DIR__ . '/../partials/layout-start.php';
     <a href="orders-export.php?<?= h($exportQuery) ?>" class="btn" style="width: auto;">Exporteren naar Excel</a>
 </div>
 
+<?php if (isset($_GET['updated'])): ?>
+    <div class="alert alert-success">Bestelling is bijgewerkt.</div>
+<?php elseif (isset($_GET['deleted'])): ?>
+    <div class="alert alert-success">Bestelling is verwijderd.</div>
+<?php endif; ?>
+
 <div class="card" style="padding: 18px 22px;">
     <form method="get" action="orders.php">
         <div class="row" style="align-items: end;">
@@ -175,6 +184,7 @@ require __DIR__ . '/../partials/layout-start.php';
                     <th>Totaal</th>
                     <th>Status</th>
                     <th>Mail verzonden</th>
+                    <th>Acties</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -191,6 +201,20 @@ require __DIR__ . '/../partials/layout-start.php';
                         <td>€ <?= h(number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.')) ?></td>
                         <td><span class="badge <?= orderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span></td>
                         <td><?= $order['confirmation_email_sent_at'] !== null ? '✅' : '—' ?></td>
+                        <td>
+                            <div class="actions-dropdown">
+                                <button type="button" class="icon-btn actions-trigger" title="Acties" aria-label="Acties">⋮</button>
+                                <div class="actions-menu">
+                                    <a href="order-form.php?id=<?= (int) $order['id'] ?>">✏️ Bewerken</a>
+                                    <form method="post" action="order-delete.php"
+                                          onsubmit="return confirm('Weet je zeker dat je deze bestelling wilt verwijderen? Dit kan niet ongedaan worden gemaakt.');">
+                                        <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
+                                        <input type="hidden" name="id" value="<?= (int) $order['id'] ?>">
+                                        <button type="submit" class="danger">🗑️ Verwijderen</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
