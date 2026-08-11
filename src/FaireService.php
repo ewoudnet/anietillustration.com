@@ -19,9 +19,13 @@ namespace App;
  * is dus het schema voor dit type token, niet het OAuth-schema uit de spec.
  *
  * - Base URL (production): https://www.faire.com/external-api/v2
- * - Endpoint: GET /product-inventory/by-skus?skus=SKU1,SKU2,... (max. SKUS_PER_REQUEST per
- *   aanroep; bij meer wordt automatisch in batches opgesplitst). De oudere
- *   /products/variants/inventory-levels-by-skus is deprecated.
+ * - Endpoint: GET /product-inventory/by-skus?skus=SKU1&skus=SKU2&... (max. SKUS_PER_REQUEST
+ *   per aanroep; bij meer wordt automatisch in batches opgesplitst). De oudere
+ *   /products/variants/inventory-levels-by-skus is deprecated. Belangrijk: dit moet een
+ *   herhaalde query-parameter zijn (`skus=A&skus=B`) - een kommagescheiden lijst
+ *   (`skus=A,B`, wat de documentatietekst suggereert) of `skus[]=A&skus[]=B` geeft geen
+ *   fout maar stilletjes een lege `inventories`-respons terug (getest op 11-08-2026: bij
+ *   1 SKU in de query werkt kommagescheiden toevallig ook, met 2+ SKU's niet meer).
  * - Authenticatie: X-FAIRE-ACCESS-TOKEN: <access token> (enkele header, geen
  *   X-FAIRE-APP-CREDENTIALS nodig).
  * - Response: {"inventories": {"<sku>": {"available_quantity": {"type": "QUANTITY"|"UNTRACKED", "quantity": 42}, ...}, ...}}
@@ -58,7 +62,7 @@ final class FaireService
 
         $result = [];
         foreach (array_chunk($skus, self::SKUS_PER_REQUEST) as $chunk) {
-            $response = self::request('GET', '/product-inventory/by-skus', ['skus' => implode(',', $chunk)]);
+            $response = self::request('GET', '/product-inventory/by-skus', ['skus' => $chunk]);
 
             foreach ($response['inventories'] ?? [] as $sku => $inventory) {
                 $available = $inventory['available_quantity'] ?? null;
@@ -72,7 +76,9 @@ final class FaireService
     }
 
     /**
-     * @param array<string, string> $query
+     * @param array<string, string|array<int, string>> $query waarde als array levert een
+     *                                                         herhaalde query-parameter op
+     *                                                         (key=item1&key=item2&...)
      * @return array<string, mixed>
      */
     private static function request(string $method, string $path, array $query = []): array
@@ -85,7 +91,13 @@ final class FaireService
 
         $url = self::BASE_URL . $path;
         if ($query !== []) {
-            $url .= '?' . http_build_query($query);
+            $pairs = [];
+            foreach ($query as $key => $value) {
+                foreach ((array) $value as $item) {
+                    $pairs[] = rawurlencode((string) $key) . '=' . rawurlencode((string) $item);
+                }
+            }
+            $url .= '?' . implode('&', $pairs);
         }
 
         $curl = curl_init($url);
