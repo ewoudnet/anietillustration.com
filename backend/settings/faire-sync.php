@@ -23,8 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'sync'
     if (!Csrf::verify((string) ($_POST['csrf_token'] ?? ''))) {
         $errors[] = 'Je sessie is verlopen. Probeer het opnieuw.';
     } elseif (!FaireService::isConfigured()) {
-        $errors[] = 'Faire-credentials zijn nog niet ingesteld in .env ' .
-            '(FAIRE_APPLICATION_ID, FAIRE_APPLICATION_SECRET, FAIRE_ACCESS_TOKEN).';
+        $errors[] = 'Faire-credentials zijn nog niet ingesteld in .env (FAIRE_ACCESS_TOKEN).';
     } else {
         try {
             $cardSkuMap = CardRepository::allIdsBySku();

@@ -11,23 +11,25 @@ namespace App;
  *
  * Endpoint en response-structuur geverifieerd op 30-07-2026 door de ingebedde OpenAPI-spec
  * van developers.faire.com/docs rechtstreeks uit te lezen (het "apiDescriptionDocument"-
- * attribuut op het <elements-api>-element) - dus niet uit documentatietekst afgeleid.
+ * attribuut op het <elements-api>-element) - dus niet uit documentatietekst afgeleid. De
+ * OpenAPI-spec beschrijft het generieke OAuth-schema (X-FAIRE-APP-CREDENTIALS +
+ * X-FAIRE-OAUTH-ACCESS-TOKEN), maar dat gaf op 11-08-2026 een 401 terug. De token die Faire's
+ * integrations.support@faire.com voor deze eigen/custom integratie (zonder tussenpartij)
+ * afgeeft, werkt met het simpelere enkele-header-schema hieronder (zelf getest, 200 OK) - dat
+ * is dus het schema voor dit type token, niet het OAuth-schema uit de spec.
  *
  * - Base URL (production): https://www.faire.com/external-api/v2
  * - Endpoint: GET /product-inventory/by-skus?skus=SKU1,SKU2,... (max. SKUS_PER_REQUEST per
  *   aanroep; bij meer wordt automatisch in batches opgesplitst). De oudere
  *   /products/variants/inventory-levels-by-skus is deprecated.
- * - Authenticatie: ALTIJD beide headers samen (geldt voor de hele API, ook voor een los
- *   Brand Portal-token voor één merk):
- *     X-FAIRE-APP-CREDENTIALS:    base64(applicationId:applicationSecret)
- *     X-FAIRE-OAUTH-ACCESS-TOKEN: het access token
+ * - Authenticatie: X-FAIRE-ACCESS-TOKEN: <access token> (enkele header, geen
+ *   X-FAIRE-APP-CREDENTIALS nodig).
  * - Response: {"inventories": {"<sku>": {"available_quantity": {"type": "QUANTITY"|"UNTRACKED", "quantity": 42}, ...}, ...}}
  *   SKU's die niet in de response voorkomen, bestaan niet (meer) bij Faire onder die SKU.
  *   "UNTRACKED" betekent dat Faire geen voorraadaantal bijhoudt voor die variant - dan is
  *   er geen bruikbaar getal om over te nemen.
  *
- * Credentials horen in .env (FAIRE_APPLICATION_ID, FAIRE_APPLICATION_SECRET,
- * FAIRE_ACCESS_TOKEN), niet hier.
+ * Credential hoort in .env (FAIRE_ACCESS_TOKEN), niet hier.
  */
 final class FaireService
 {
@@ -36,9 +38,7 @@ final class FaireService
 
     public static function isConfigured(): bool
     {
-        return Config::get('FAIRE_APPLICATION_ID', '') !== ''
-            && Config::get('FAIRE_APPLICATION_SECRET', '') !== ''
-            && Config::get('FAIRE_ACCESS_TOKEN', '') !== '';
+        return Config::get('FAIRE_ACCESS_TOKEN', '') !== '';
     }
 
     /**
@@ -79,8 +79,7 @@ final class FaireService
     {
         if (!self::isConfigured()) {
             throw new \RuntimeException(
-                'Faire-credentials zijn nog niet volledig ingesteld in .env ' .
-                '(FAIRE_APPLICATION_ID, FAIRE_APPLICATION_SECRET, FAIRE_ACCESS_TOKEN).'
+                'Faire-credentials zijn nog niet ingesteld in .env (FAIRE_ACCESS_TOKEN).'
             );
         }
 
@@ -89,17 +88,12 @@ final class FaireService
             $url .= '?' . http_build_query($query);
         }
 
-        $appCredentials = base64_encode(
-            Config::get('FAIRE_APPLICATION_ID', '') . ':' . Config::get('FAIRE_APPLICATION_SECRET', '')
-        );
-
         $curl = curl_init($url);
         curl_setopt_array($curl, [
             CURLOPT_CUSTOMREQUEST => $method,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => [
-                'X-FAIRE-APP-CREDENTIALS: ' . $appCredentials,
-                'X-FAIRE-OAUTH-ACCESS-TOKEN: ' . Config::get('FAIRE_ACCESS_TOKEN', ''),
+                'X-FAIRE-ACCESS-TOKEN: ' . Config::get('FAIRE_ACCESS_TOKEN', ''),
                 'Accept: application/json',
             ],
             CURLOPT_TIMEOUT => 20,
