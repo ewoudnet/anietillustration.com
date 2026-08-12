@@ -15,6 +15,7 @@ Auth::requireLogin();
 const SECTION_ENTRY_PAGES = [
     'aniet-illustration' => 'aniet-illustration/cards.php',
     'specials' => 'specials/index.php',
+    'wholesale' => 'wholesale/index.php',
 ];
 
 if (Auth::isAdmin()) {
