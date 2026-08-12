@@ -34,16 +34,29 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   `src/ProductPlatformListingRepository.php`,
   `src/StockSyncLogRepository.php` — data-toegang, mysqli-stijl (consistent
   met `ProductRepository`).
-- `src/OrderchampService.php` — nog alleen `isConfigured()`; de echte
-  GraphQL-koppeling volgt in een latere fase (zie [[products]] en
-  onderstaande openstaande punten).
+- `src/OrderchampService.php` — GraphQL-client (`graphql()` + `isConfigured()`
+  + `fetchOrdersPage()`), schema geverifieerd via developers.orderchamp.com
+  maar **nog niet live getest** (geen `ORDERCHAMP_ACCESS_TOKEN` in .env, zie
+  onderstaande openstaande punten). Voorraad lezen/schrijven volgt in fase C/D.
+- `src/FaireService.php` — uitgebreid met `fetchOrdersPage()` en
+  `fetchRetailer()`, beide live geverifieerd tegen de echte Faire-API.
+- `src/SkuResolver.php` — matcht een externe SKU tegen `cards` óf `products`
+  (zelfde twee-tabellen-aanpak als de bestaande Faire-voorraadsync).
+- `src/WholesaleOrderImporter.php` — normaliseert Faire/Orderchamp-orders naar
+  het eigen model en schrijft ze weg (shop + order + regels); wordt ook
+  hergebruikt voor de nieuwe-order-webhooks in fase E. Roept nooit
+  voorraadcode aan.
 - `backend/wholesale/` — `index.php` (dashboard), `orders.php` +
   `order-form.php` (overzicht + detail, zoeken op shopnaam/SKU/titel,
   filter op platform/status/periode), `orders-export.php` (Excel, zelfde
-  `XlsxWriter` als [[orders]]), `shops.php` (kaart met Leaflet + OpenStreetMap
-  -tiles), `sku-comparison.php` (matrix producten × platformen),
-  `sync-log.php` (auditlog-viewer), `settings.php` (per-platform
+  `XlsxWriter` als [[orders]]), `import.php` (historische import, per pagina
+  van max. 50 orders, alleen voor admins), `shops.php` (kaart met Leaflet +
+  OpenStreetMap-tiles), `sku-comparison.php` (matrix producten+kaarten ×
+  platformen), `sync-log.php` (auditlog-viewer), `settings.php` (per-platform
   sync-aan/uit-schakelaar, alleen voor admins).
+- `backend/bootstrap.php` — `money(int $cents, string $currency): string`
+  helper (Faire/Orderchamp-orders zijn niet altijd EUR, in tegenstelling tot
+  specials, dus geen hardcoded "€" in de wholesale-pagina's).
 - `backend/partials/nav-topbar.php` / `backend/index.php` — sectie "Wholesale"
   toegevoegd aan de bestaande topbar/subnav-structuur (géén linker menu, zie
   [[backend]] voor die afwijking t.o.v. de oorspronkelijke docs-beschrijving).
@@ -51,44 +64,69 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
 ## Status / openstaande punten
 - [x] **Fase A (skelet):** datamodel, backend-sectie + navigatie, alle
   pagina's draaien tegen de echte (nog lege) tabellen.
-- [ ] **Fase B:** bestaande Faire- én Orderchamp-orders historisch inladen in
-  `wholesale_orders`/`wholesale_order_items`/`shops` — mag `products.
-  current_stock` niet aanraken.
+- [x] **Fase B (historische import):** `backend/wholesale/import.php` haalt
+  Faire-orders op (cursor-gepagineerd, max. 50 per klik) en schrijft
+  shop/order/regels weg, idempotent (herhaald importeren overschrijft dezelfde
+  rijen i.p.v. te dupliceren). Orderchamp-kant is gebouwd maar niet live
+  getest (zie hieronder). Raakt nooit `products.current_stock`/
+  `cards.current_stock` (expliciet getest, zie "Getest" hieronder).
 - [ ] **Fase C:** voorraad lezen — Faire-inventory-call ontsluiten in het
   vergelijkingsoverzicht; Orderchamp-lezen nieuw bouwen zodra de
   GraphQL-koppeling er is.
 - [ ] **Fase D:** voorraad schrijven, eerst dry-run (loggen zonder echt te
   posten) achter de `sync_enabled`-schakelaar per platform.
 - [ ] **Fase E:** nieuwe-order-webhooks (Faire + Orderchamp) → automatische
-  import + voorraadaftrek.
+  import + voorraadaftrek. Hergebruikt `WholesaleOrderImporter`.
 - [ ] **Fase F:** annuleringen → status omzetten + voorraad corrigeren.
 - [ ] **Fase G:** live zetten per platform zodra alle producten er correct op
   staan (harde voorwaarde van de gebruiker, zie CLAUDE.md-conventie hierover
   niet apart vastgelegd maar wel leidend voor de bouwvolgorde).
-- [ ] Orderchamp: echte GraphQL-client, orders/inventory-methoden,
-  webhookverificatie (`X-Orderchamp-Signature`) — wacht op de al beschikbare
-  toegangstoken (zie hieronder) en op de nog te ontvangen webhook-signing
-  secret.
-- [ ] Faire: orders-API en voorraad-terugschrijven zijn niet geverifieerd
-  (devdocs zijn client-side gerenderd, niet automatisch uitleesbaar; Faire-
-  shop stond tijdens het bouwen op vakantiestop) — verifiëren zodra er
-  weer toegang is, vóór er iets op aangesloten wordt.
+- [ ] Orderchamp: `ORDERCHAMP_ACCESS_TOKEN` nog niet in .env gezet (gebruiker
+  heeft al wel een token) — zodra dat er is, `OrderchampService::
+  fetchOrdersPage()` als eerste live verifiëren (schema is nu alleen tegen de
+  publieke schema-docs gecontroleerd, niet tegen een echte respons) en de
+  webhook-signing secret ophalen bij het registreren van de webhook
+  (fase E).
+- [x] Faire: orders-API (`GET /orders`) en retailer-profiel (`GET /retailers/
+  public/{id}`) zijn alsnog geverifieerd — de OpenAPI-spec bleek uitleesbaar
+  via developers.faire.com (zelfde `apidescriptiondocument`-DOM-attribuut-
+  truc als bij de bestaande inventory-endpoint) én live getest met het
+  bestaande FAIRE_ACCESS_TOKEN (200 OK, 87 echte orders succesvol
+  geïmporteerd tijdens testen). Voorraad-terugschrijven (`PATCH
+  /product-inventory/by-skus` bestaat, zie de spec) is nog niet gebruikt/
+  getest - volgt in fase D.
 - [ ] Geocoding van shopadressen (OpenStreetMap Nominatim) → `shops.lat/lng`.
+  Let op: Faire levert ISO alpha-3 landcodes, Orderchamp alpha-2 - bewust
+  ongenormaliseerd opgeslagen in `shops.country_code` (VARCHAR(3)).
 - [ ] Periodieke reconciliatie-job (vangnet tegen gemiste webhooks) — hosting
   heeft hiervoor een cron-optie bevestigd.
 - [ ] Deel 2 (B2B-webshop, zie "Doel" hierboven) — nog niet gestart, wacht op
   een go-beslissing en een niet-verwarrende naam naast deze sectie.
 
-## Getest (lokaal, 2026-08-12)
-Fase A getest tegen een losstaande, wegwerpbare MariaDB-container (niet de
+## Getest
+**Fase A (2026-08-12):** losstaande, wegwerpbare MariaDB-container (niet de
 live database) via `php -S`: login, alle nieuwe `backend/wholesale/`-pagina's
 (200, geen PHP-fouten), zoeken/filteren op orders.php (shopnaam/SKU/titel,
 platform, status, periode), de sync_enabled-schakelaar op settings.php, en
 de kaartpagina (Leaflet + OpenStreetMap laden zonder consolefouten) met
 seed-data (1 shop, 2 orders waarvan 1 geannuleerd, 2 producten, 3
-platform-listings, 2 sync-logregels). Eén bug gevonden en gefixt tijdens het
-testen: `ssl` is een reserved word in MariaDB en kon niet als tabel-alias in
+platform-listings, 2 sync-logregels). Eén bug gevonden en gefixt: `ssl` is een
+reserved word in MariaDB en kon niet als tabel-alias in
 `StockSyncLogRepository` gebruikt worden (hernoemd naar `l`).
+
+**Fase B (2026-08-12):** opnieuw een losstaande MariaDB-container, dit keer
+met een **echte, read-only** import tegen de live Faire-API (bestaand
+FAIRE_ACCESS_TOKEN), wegschrijvend naar de wegwerp-database - nooit naar de
+live database. Resultaat: 87 echte orders + 57 echte shops correct
+geïmporteerd over 2 paginabatches; herhaald importeren van dezelfde batch gaf
+exact dezelfde aantallen (idempotent, geen duplicaten); een testkaart met een
+echte, uit de import bekende SKU toegevoegd en opnieuw geïmporteerd liet
+`card_id` correct invullen op alle regels met die SKU, terwijl
+`cards.current_stock` ongewijzigd bleef (expliciet gecontroleerd vóór/na).
+UI-check: orders.php/shops.php/sku-comparison.php renderen zonder PHP-fouten
+met deze echte data, inclusief de multi-currency-fix (één order stond in USD;
+de rest in EUR). Orderchamp-kant kon niet live getest worden (nog geen
+token in .env) - alleen tegen de publieke schema-documentatie gebouwd.
 
 ## Beslissingen & rationale
 - **Beslissing:** Faire/Orderchamp-marktplaatsorders krijgen een eigen
@@ -114,6 +152,38 @@ testen: `ssl` is een reserved word in MariaDB en kon niet als tabel-alias in
   **Waarom:** geen facturatie/Cloud-account nodig, past bij de rest van de
   stack (geen zware afhankelijkheden); geocoding van adressen (nog te
   bouwen) volgt om diezelfde reden via Nominatim i.p.v. Google Geocoding.
+  **Datum:** 2026-08-12
+
+- **Beslissing:** `wholesale_order_items`/`product_platform_listings` matchen
+  op zowel `products` als `cards` (nieuwe nullable `card_id`-kolom naast
+  `product_id`, precies één van beide gezet).
+  **Waarom:** de bestaande Faire-voorraadsync matcht ook al op beide tabellen
+  - zonder deze uitbreiding zouden alle wholesale-orderregels met een
+  kaart-SKU permanent als "niet gematcht" verschijnen. Toegevoegd via
+  `sql/migrations/006_wholesale_card_support.sql`.
+  **Datum:** 2026-08-12
+- **Beslissing:** Faire's order-`display_id` (bv. "3FVB9TN5XE") als
+  `external_order_id` gebruikt, niet de opaque `id` (bv. "bo_3fvb9tn5xe").
+  **Waarom:** `display_id` is wat de gebruiker ook in Faire's eigen
+  brand-portal ziet - herkenbaarder in het backend-orderoverzicht dan het
+  interne API-ID. Beide zijn gegarandeerd uniek (display_id is een
+  deterministische afleiding van id).
+  **Datum:** 2026-08-12
+- **Beslissing:** `wholesale_orders.total_amount_cents` voor Faire wordt
+  berekend als som van `item.price × quantity` over alle regels, niet
+  overgenomen van een kant-en-klaar totaalveld.
+  **Waarom:** Faire's ordermodel heeft geen simpel "ordertotaal"-veld (alleen
+  `payout_costs` - de nettouitkering aan het merk NA commissie/fees, een
+  ander getal). Dit is dus een benadering die verzendkosten/belasting/
+  kortingen buiten beschouwing laat; prima voor het huidige overzicht/kaart-
+  gebruik, maar niet 1-op-1 gelijk aan wat Faire zelf als "totaal" toont.
+  **Datum:** 2026-08-12
+- **Beslissing:** geen hardcoded "€" meer in de wholesale-pagina's; een
+  nieuwe `money()`-helper toont het bedrag met de echte valuta van de order.
+  **Waarom:** tijdens het bouwen van fase B bleek een deel van de echte
+  Faire-orders in USD te staan terwijl de fase A-UI overal een hardcoded €
+  liet zien (en de omzet-som in orders.php telde EUR en USD-bedragen zomaar
+  bij elkaar op) - alsnog gecorrigeerd, ook in de al gecommitte fase A-code.
   **Datum:** 2026-08-12
 
 ## Zie ook

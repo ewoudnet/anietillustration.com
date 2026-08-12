@@ -180,6 +180,18 @@ function sortHeader(string $column, string $label, string $currentSort, string $
 }
 
 /**
+ * Bedrag met valuta-aanduiding, voor Wholesale (Faire/Orderchamp-orders zijn niet
+ * altijd EUR, in tegenstelling tot specials - dus geen hardcoded "€" zoals daar).
+ */
+function money(int $cents, string $currency): string
+{
+    $symbols = ['EUR' => '€', 'USD' => '$', 'GBP' => '£'];
+    $symbol = $symbols[$currency] ?? ($currency . ' ');
+
+    return $symbol . number_format($cents / 100, 2, ',', '.');
+}
+
+/**
  * Live, publieke URL van een special (t.b.v. "bekijk live"-links in de backend), via de
  * deelbare slug als die er is, anders het ?s={id}-fallbackformaat.
  *

@@ -48,10 +48,15 @@ $totalPages = max(1, (int) ceil($totalOrders / WHOLESALE_ORDERS_PER_PAGE));
 $page = min($totalPages, max(1, (int) ($_GET['page'] ?? 1)));
 $pagedOrders = array_slice($orders, ($page - 1) * WHOLESALE_ORDERS_PER_PAGE, WHOLESALE_ORDERS_PER_PAGE);
 
-$revenueCents = array_sum(array_map(
-    static fn (array $o) => $o['status'] === 'canceled' ? 0 : (int) $o['total_amount_cents'],
-    $orders
-));
+// Per valuta optellen, niet alles bij elkaar - orders van Faire zijn vaak USD,
+// niet EUR zoals bij specials, dus cross-currency samenvoegen zou een zinloos getal geven.
+$revenueByCurrency = [];
+foreach ($orders as $order) {
+    if ($order['status'] === 'canceled') {
+        continue;
+    }
+    $revenueByCurrency[$order['currency']] = ($revenueByCurrency[$order['currency']] ?? 0) + (int) $order['total_amount_cents'];
+}
 
 $exportQuery = http_build_query($filters);
 
@@ -115,10 +120,12 @@ require __DIR__ . '/../partials/layout-start.php';
         <div class="value"><?= $totalOrders ?></div>
         <div class="label">Getoond (na filters)</div>
     </div>
-    <div class="stat-tile">
-        <div class="value">€ <?= h(number_format($revenueCents / 100, 2, ',', '.')) ?></div>
-        <div class="label">Omzet (excl. geannuleerd, getoond)</div>
-    </div>
+    <?php foreach ($revenueByCurrency as $currency => $cents): ?>
+        <div class="stat-tile">
+            <div class="value"><?= h(money($cents, $currency)) ?></div>
+            <div class="label">Omzet <?= h($currency) ?> (excl. geannuleerd, getoond)</div>
+        </div>
+    <?php endforeach; ?>
 </div>
 
 <div class="card">
@@ -145,7 +152,7 @@ require __DIR__ . '/../partials/layout-start.php';
                         <td><?= h($order['external_order_id']) ?></td>
                         <td><?= h($order['shop_name'] ?? '—') ?></td>
                         <td><?= h((new DateTimeImmutable($order['placed_at']))->format('d-m-Y H:i')) ?></td>
-                        <td>€ <?= h(number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.')) ?></td>
+                        <td><?= h(money((int) $order['total_amount_cents'], $order['currency'])) ?></td>
                         <td><span class="badge <?= wholesaleOrderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span></td>
                         <td><a href="order-form.php?id=<?= (int) $order['id'] ?>">Bekijken</a></td>
                     </tr>

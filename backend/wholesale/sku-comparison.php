@@ -5,6 +5,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 
 use App\Auth;
+use App\CardRepository;
 use App\ProductPlatformListingRepository;
 use App\ProductRepository;
 use App\WholesalePlatformRepository;
@@ -12,8 +13,31 @@ use App\WholesalePlatformRepository;
 Auth::requireSection('wholesale');
 
 $platforms = WholesalePlatformRepository::findAll();
-$products = ProductRepository::findAllWithTypeName();
 $listingsByProduct = ProductPlatformListingRepository::allGroupedByProduct();
+$listingsByCard = ProductPlatformListingRepository::allGroupedByCard();
+
+// Producten en kaarten samen tonen - Wholesale verkoopt allebei (zelfde SKU-
+// ruimte als de bestaande Faire-voorraadsync), zie docs/wholesale.md.
+$items = [];
+foreach (ProductRepository::findAllWithTypeName() as $product) {
+    $items[] = [
+        'sku' => $product['sku'],
+        'title' => $product['title'],
+        'type_name' => $product['product_type_name'],
+        'current_stock' => $product['current_stock'],
+        'listings' => $listingsByProduct[(int) $product['id']] ?? [],
+    ];
+}
+foreach (CardRepository::search() as $card) {
+    $items[] = [
+        'sku' => $card['sku'],
+        'title' => $card['title'],
+        'type_name' => 'Kaarten',
+        'current_stock' => $card['current_stock'],
+        'listings' => $listingsByCard[(int) $card['id']] ?? [],
+    ];
+}
+usort($items, static fn (array $a, array $b): int => strcmp($a['sku'], $b['sku']));
 
 $onlyIssues = isset($_GET['only_issues']);
 
@@ -28,19 +52,19 @@ require __DIR__ . '/../partials/layout-start.php';
 
 <div class="card" style="margin-bottom: 20px;">
     <p class="hint">
-        Toont per product of het op Faire en Orderchamp geplaatst is, en of de
-        laatst geziene voorraad daar overeenkomt met de eigen voorraad. Zolang er
-        nog geen platformkoppeling actief is (fase C+), staat hier voor elk
-        product "niet geplaatst" - dat is verwacht, geen fout.
+        Toont per product/kaart of het op Faire en Orderchamp geplaatst is, en
+        of de laatst geziene voorraad daar overeenkomt met de eigen voorraad.
+        Zolang er nog geen platformkoppeling actief is (fase C+), staat hier
+        voor elk item "niet geplaatst" - dat is verwacht, geen fout.
     </p>
     <a href="?<?= $onlyIssues ? '' : 'only_issues=1' ?>" class="btn btn-secondary" style="width: auto; display: inline-block;">
-        <?= $onlyIssues ? 'Toon alle producten' : 'Toon alleen producten met een afwijking' ?>
+        <?= $onlyIssues ? 'Toon alles' : 'Toon alleen items met een afwijking' ?>
     </a>
 </div>
 
 <div class="card">
-    <?php if (count($products) === 0): ?>
-        <p>Er zijn nog geen producten aangemaakt.</p>
+    <?php if (count($items) === 0): ?>
+        <p>Er zijn nog geen producten of kaarten aangemaakt.</p>
     <?php else: ?>
         <div class="table-wrapper">
             <table>
@@ -58,8 +82,8 @@ require __DIR__ . '/../partials/layout-start.php';
                 <tbody>
                 <?php
                 $shown = 0;
-                foreach ($products as $product):
-                    $listings = $listingsByProduct[(int) $product['id']] ?? [];
+                foreach ($items as $item):
+                    $listings = $item['listings'];
                     $hasIssue = false;
                     foreach ($platforms as $platform) {
                         $listing = $listings[$platform['code']] ?? null;
@@ -67,7 +91,7 @@ require __DIR__ . '/../partials/layout-start.php';
                             $hasIssue = true;
                             continue;
                         }
-                        if ($listing['last_seen_stock'] !== null && (int) $listing['last_seen_stock'] !== (int) $product['current_stock']) {
+                        if ($listing['last_seen_stock'] !== null && (int) $listing['last_seen_stock'] !== (int) $item['current_stock']) {
                             $hasIssue = true;
                         }
                     }
@@ -77,16 +101,16 @@ require __DIR__ . '/../partials/layout-start.php';
                     $shown++;
                     ?>
                     <tr>
-                        <td><?= h($product['sku']) ?></td>
-                        <td><?= h($product['title']) ?></td>
-                        <td><?= h($product['product_type_name']) ?></td>
-                        <td><?= $product['current_stock'] !== null ? (int) $product['current_stock'] : '—' ?></td>
+                        <td><?= h($item['sku']) ?></td>
+                        <td><?= h($item['title']) ?></td>
+                        <td><?= h($item['type_name']) ?></td>
+                        <td><?= $item['current_stock'] !== null ? (int) $item['current_stock'] : '—' ?></td>
                         <?php foreach ($platforms as $platform): ?>
                             <?php $listing = $listings[$platform['code']] ?? null; ?>
                             <td>
                                 <?php if ($listing === null || (int) $listing['is_listed'] !== 1): ?>
                                     <span class="badge badge-off">Niet geplaatst</span>
-                                <?php elseif ($listing['last_seen_stock'] !== null && (int) $listing['last_seen_stock'] !== (int) $product['current_stock']): ?>
+                                <?php elseif ($listing['last_seen_stock'] !== null && (int) $listing['last_seen_stock'] !== (int) $item['current_stock']): ?>
                                     <span class="badge badge-failed">Voorraad wijkt af (<?= (int) $listing['last_seen_stock'] ?>)</span>
                                 <?php else: ?>
                                     <span class="badge badge-on">Geplaatst</span>
@@ -96,7 +120,7 @@ require __DIR__ . '/../partials/layout-start.php';
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($shown === 0): ?>
-                    <tr><td colspan="<?= 4 + count($platforms) ?>">Geen producten met een afwijking gevonden.</td></tr>
+                    <tr><td colspan="<?= 4 + count($platforms) ?>">Geen items met een afwijking gevonden.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

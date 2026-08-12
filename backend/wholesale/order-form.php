@@ -56,7 +56,7 @@ require __DIR__ . '/../partials/layout-start.php';
         <div style="flex: 1 1 200px;"><strong>Shop</strong><br><?= h($order['shop_name'] ?? '—') ?></div>
         <div style="flex: 1 1 200px;"><strong>Geplaatst op</strong><br><?= h((new DateTimeImmutable($order['placed_at']))->format('d-m-Y H:i')) ?></div>
         <div style="flex: 1 1 200px;"><strong>Status</strong><br><span class="badge <?= wholesaleOrderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span></div>
-        <div style="flex: 1 1 200px;"><strong>Totaal</strong><br>€ <?= h(number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.')) ?></div>
+        <div style="flex: 1 1 200px;"><strong>Totaal</strong><br><?= h(money((int) $order['total_amount_cents'], $order['currency'])) ?></div>
     </div>
     <?php if ($order['canceled_at'] !== null): ?>
         <p class="hint" style="margin-top: 12px;">Geannuleerd op <?= h((new DateTimeImmutable($order['canceled_at']))->format('d-m-Y H:i')) ?>.</p>
@@ -85,10 +85,12 @@ require __DIR__ . '/../partials/layout-start.php';
                         <td><?= h($item['sku']) ?></td>
                         <td><?= h($item['title_snapshot']) ?></td>
                         <td><?= (int) $item['quantity'] ?></td>
-                        <td>€ <?= h(number_format(((int) $item['unit_price_cents']) / 100, 2, ',', '.')) ?></td>
+                        <td><?= h(money((int) $item['unit_price_cents'], $order['currency'])) ?></td>
                         <td>
                             <?php if ($item['product_id'] !== null): ?>
-                                <span class="badge badge-on">Gekoppeld</span>
+                                <span class="badge badge-on">Gekoppeld (product)</span>
+                            <?php elseif ($item['card_id'] !== null): ?>
+                                <span class="badge badge-on">Gekoppeld (kaart)</span>
                             <?php else: ?>
                                 <span class="badge badge-failed">Niet gematcht</span>
                             <?php endif; ?>

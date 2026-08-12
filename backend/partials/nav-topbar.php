@@ -85,6 +85,7 @@ $sectionEntryPages = [
     <nav class="subnav">
         <a href="<?= h(BACKEND_BASE) ?>/wholesale/index.php" class="<?= $activePage === 'index' ? 'active' : '' ?>">Overzicht</a>
         <a href="<?= h(BACKEND_BASE) ?>/wholesale/orders.php" class="<?= $activePage === 'orders' ? 'active' : '' ?>">Bestellingen</a>
+        <a href="<?= h(BACKEND_BASE) ?>/wholesale/import.php" class="<?= $activePage === 'import' ? 'active' : '' ?>">Historische import</a>
         <a href="<?= h(BACKEND_BASE) ?>/wholesale/shops.php" class="<?= $activePage === 'shops' ? 'active' : '' ?>">Shops &amp; kaart</a>
         <a href="<?= h(BACKEND_BASE) ?>/wholesale/sku-comparison.php" class="<?= $activePage === 'sku-comparison' ? 'active' : '' ?>">SKU-vergelijking</a>
         <a href="<?= h(BACKEND_BASE) ?>/wholesale/sync-log.php" class="<?= $activePage === 'sync-log' ? 'active' : '' ?>">Synchronisatielog</a>

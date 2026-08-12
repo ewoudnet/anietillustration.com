@@ -65,10 +65,82 @@ final class WholesaleOrderRepository
     public static function countUnmatchedSkus(): int
     {
         $row = Database::fetchOne(
-            'SELECT COUNT(DISTINCT sku) AS total FROM wholesale_order_items WHERE product_id IS NULL'
+            'SELECT COUNT(DISTINCT sku) AS total FROM wholesale_order_items
+             WHERE product_id IS NULL AND card_id IS NULL'
         );
 
         return (int) ($row['total'] ?? 0);
+    }
+
+    /**
+     * Maakt een order aan of werkt hem bij (op platform_id + external_order_id),
+     * en geeft altijd het (bestaande of nieuwe) id terug - gebruikt door
+     * WholesaleOrderImporter. Nooit aangeroepen buiten import/sync-code, en
+     * raakt zelf nooit products.current_stock/cards.current_stock.
+     *
+     * @param array{platform_id: int, external_order_id: string, shop_id: ?int, status: string, placed_at: string, currency: string, total_amount_cents: int, canceled_at: ?string, raw_payload: array<string, mixed>} $data
+     */
+    public static function upsert(array $data): int
+    {
+        return Database::insert(
+            'INSERT INTO wholesale_orders
+                (platform_id, external_order_id, shop_id, status, placed_at, currency, total_amount_cents, canceled_at, raw_payload)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                id = LAST_INSERT_ID(id),
+                shop_id = VALUES(shop_id),
+                status = VALUES(status),
+                placed_at = VALUES(placed_at),
+                currency = VALUES(currency),
+                total_amount_cents = VALUES(total_amount_cents),
+                canceled_at = VALUES(canceled_at),
+                raw_payload = VALUES(raw_payload)',
+            'isisssiss',
+            [
+                $data['platform_id'],
+                $data['external_order_id'],
+                $data['shop_id'],
+                $data['status'],
+                $data['placed_at'],
+                $data['currency'],
+                $data['total_amount_cents'],
+                $data['canceled_at'],
+                json_encode($data['raw_payload'], JSON_UNESCAPED_UNICODE),
+            ]
+        );
+    }
+
+    /**
+     * Vervangt alle regels van een order door de gegeven set - eenvoudiger en
+     * veiliger dan proberen te diffen tegen de vorige import, en Faire/
+     * Orderchamp leveren toch altijd de volledige orderinhoud. Raakt nooit
+     * voorraad.
+     *
+     * @param array<int, array{sku: string, title_snapshot: string, quantity: int, unit_price_cents: int, product_id: ?int, card_id: ?int}> $items
+     */
+    public static function replaceItems(int $wholesaleOrderId, array $items): void
+    {
+        Database::transaction(static function () use ($wholesaleOrderId, $items): void {
+            Database::run('DELETE FROM wholesale_order_items WHERE wholesale_order_id = ?', 'i', [$wholesaleOrderId]);
+
+            foreach ($items as $item) {
+                Database::run(
+                    'INSERT INTO wholesale_order_items
+                        (wholesale_order_id, product_id, card_id, sku, title_snapshot, quantity, unit_price_cents)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    'iiissii',
+                    [
+                        $wholesaleOrderId,
+                        $item['product_id'],
+                        $item['card_id'],
+                        $item['sku'],
+                        $item['title_snapshot'],
+                        $item['quantity'],
+                        $item['unit_price_cents'],
+                    ]
+                );
+            }
+        });
     }
 
     /**

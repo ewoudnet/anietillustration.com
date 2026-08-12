@@ -114,7 +114,12 @@ CREATE TABLE IF NOT EXISTS wholesale_platforms (
 
 CREATE TABLE IF NOT EXISTS product_platform_listings (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    product_id INT UNSIGNED NOT NULL,
+    -- Precies één van product_id/card_id is gezet (nooit beide, nooit geen van
+    -- beide) - "producten" en "kaarten" hebben allebei een eigen SKU-ruimte,
+    -- zie CardRepository/ProductRepository en de bestaande Faire-sync die ze
+    -- ook al allebei op SKU matcht.
+    product_id INT UNSIGNED DEFAULT NULL,
+    card_id INT UNSIGNED DEFAULT NULL,
     platform_id INT UNSIGNED NOT NULL,
     external_sku VARCHAR(50) DEFAULT NULL,
     external_product_id VARCHAR(100) DEFAULT NULL,
@@ -125,8 +130,10 @@ CREATE TABLE IF NOT EXISTS product_platform_listings (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uq_ppl_product_platform (product_id, platform_id),
+    UNIQUE KEY uq_ppl_card_platform (card_id, platform_id),
     KEY idx_ppl_platform_id (platform_id),
     CONSTRAINT fk_ppl_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE,
+    CONSTRAINT fk_ppl_card FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE CASCADE,
     CONSTRAINT fk_ppl_platform FOREIGN KEY (platform_id) REFERENCES wholesale_platforms (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -138,7 +145,10 @@ CREATE TABLE IF NOT EXISTS shops (
     street VARCHAR(150) DEFAULT NULL,
     city VARCHAR(100) DEFAULT NULL,
     postal_code VARCHAR(20) DEFAULT NULL,
-    country_code CHAR(2) DEFAULT NULL,
+    -- VARCHAR(3), niet CHAR(2): Faire levert ISO alpha-3 (bv. "CAN"),
+    -- Orderchamp levert ISO alpha-2 (bv. "NL") - bewust ongewijzigd per
+    -- platform opgeslagen, geen normalisatie (zie docs/wholesale.md).
+    country_code VARCHAR(3) DEFAULT NULL,
     lat DECIMAL(10,7) DEFAULT NULL,
     lng DECIMAL(10,7) DEFAULT NULL,
     geocoded_at DATETIME DEFAULT NULL,
@@ -175,7 +185,11 @@ CREATE TABLE IF NOT EXISTS wholesale_orders (
 CREATE TABLE IF NOT EXISTS wholesale_order_items (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
     wholesale_order_id INT UNSIGNED NOT NULL,
+    -- NULL/NULL (geen van beide) als de SKU niet matcht met een lokaal
+    -- product of kaart - dat is zelf een signaal voor het
+    -- vergelijkingsoverzicht, geen foutsituatie.
     product_id INT UNSIGNED DEFAULT NULL,
+    card_id INT UNSIGNED DEFAULT NULL,
     sku VARCHAR(50) NOT NULL,
     title_snapshot VARCHAR(190) NOT NULL,
     quantity SMALLINT UNSIGNED NOT NULL DEFAULT 1,
@@ -183,17 +197,20 @@ CREATE TABLE IF NOT EXISTS wholesale_order_items (
     PRIMARY KEY (id),
     KEY idx_woi_wholesale_order_id (wholesale_order_id),
     KEY idx_woi_product_id (product_id),
+    KEY idx_woi_card_id (card_id),
     KEY idx_woi_sku (sku),
     CONSTRAINT fk_woi_order FOREIGN KEY (wholesale_order_id) REFERENCES wholesale_orders (id) ON DELETE CASCADE,
-    CONSTRAINT fk_woi_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL
+    CONSTRAINT fk_woi_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL,
+    CONSTRAINT fk_woi_card FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Geen FK's op product_id/platform_id - dit is een append-only auditlog, net als
--- page_views.special_id hierboven: een verwijderd product/platform mag de
--- geschiedenis niet blokkeren of wegvagen.
+-- Geen FK's op product_id/card_id/platform_id - dit is een append-only auditlog,
+-- net als page_views.special_id hierboven: een verwijderd product/kaart/platform
+-- mag de geschiedenis niet blokkeren of wegvagen.
 CREATE TABLE IF NOT EXISTS stock_sync_log (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
     product_id INT UNSIGNED DEFAULT NULL,
+    card_id INT UNSIGNED DEFAULT NULL,
     platform_id INT UNSIGNED DEFAULT NULL,
     direction ENUM('inbound', 'outbound') NOT NULL,
     trigger_type ENUM('manual_edit', 'faire_webhook', 'orderchamp_webhook', 'order_placed', 'order_canceled', 'reconciliation', 'initial_import') NOT NULL,
@@ -204,6 +221,7 @@ CREATE TABLE IF NOT EXISTS stock_sync_log (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     KEY idx_ssl_product_id (product_id),
+    KEY idx_ssl_card_id (card_id),
     KEY idx_ssl_platform_id (platform_id),
     KEY idx_ssl_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

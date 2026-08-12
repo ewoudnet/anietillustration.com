@@ -25,7 +25,7 @@ $markers = array_map(static function (array $shop): array {
         'color' => $shop['platform_color'],
         'platform' => $shop['platform_name'],
         'orderCount' => (int) $shop['order_count'],
-        'totalAmount' => number_format(((int) $shop['total_amount_cents']) / 100, 2, ',', '.'),
+        'totalAmount' => money((int) $shop['total_amount_cents'], $shop['currency']),
         'ordersUrl' => 'orders.php?' . http_build_query(['q' => $shop['name']]),
     ];
 }, $shopsWithCoordinates);
@@ -78,7 +78,7 @@ require __DIR__ . '/../partials/layout-start.php';
                         <td><?= h($shop['name']) ?></td>
                         <td><span class="badge badge-channel" style="background: <?= h($shop['platform_color']) ?>;"><?= h($shop['platform_icon'] ?? '') ?> <?= h($shop['platform_name']) ?></span></td>
                         <td><?= (int) $shop['order_count'] ?></td>
-                        <td>€ <?= h(number_format(((int) $shop['total_amount_cents']) / 100, 2, ',', '.')) ?></td>
+                        <td><?= h(money((int) $shop['total_amount_cents'], $shop['currency'])) ?></td>
                         <td><a href="orders.php?<?= h(http_build_query(['q' => $shop['name']])) ?>">Bestellingen</a></td>
                     </tr>
                 <?php endforeach; ?>
@@ -111,7 +111,7 @@ require __DIR__ . '/../partials/layout-start.php';
             marker.bindPopup(
                 '<strong>' + shop.name + '</strong><br>' +
                 shop.platform + '<br>' +
-                shop.orderCount + ' order(s), € ' + shop.totalAmount + '<br>' +
+                shop.orderCount + ' order(s), ' + shop.totalAmount + '<br>' +
                 '<a href="' + shop.ordersUrl + '">Bekijk bestellingen</a>'
             );
             bounds.push([shop.lat, shop.lng]);

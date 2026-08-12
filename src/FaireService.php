@@ -34,11 +34,20 @@ namespace App;
  *   er geen bruikbaar getal om over te nemen.
  *
  * Credential hoort in .env (FAIRE_ACCESS_TOKEN), niet hier.
+ *
+ * Orders/retailer-endpoints geverifieerd op 2026-08-12 door de ingebedde
+ * OpenAPI-spec van developers.faire.com/docs uit te lezen (zelfde
+ * `apidescriptiondocument`-attribuut-truc als bij de inventory-endpoint
+ * hierboven) én live getest tegen de echte Faire-API met het bestaande
+ * FAIRE_ACCESS_TOKEN (GET /orders en GET /retailers/public/{id} gaven beide
+ * 200 OK terug, zelfde X-FAIRE-ACCESS-TOKEN-header werkt voor alle
+ * endpoints). Zie docs/wholesale.md voor de volledige veldmapping.
  */
 final class FaireService
 {
     private const BASE_URL = 'https://www.faire.com/external-api/v2';
     private const SKUS_PER_REQUEST = 100;
+    private const ORDERS_PAGE_LIMIT = 50;
 
     public static function isConfigured(): bool
     {
@@ -73,6 +82,50 @@ final class FaireService
         }
 
         return $result;
+    }
+
+    /**
+     * Eén pagina orders (nieuw + historisch), cursor-gepagineerd. Gebruikt door
+     * WholesaleOrderImporter - roep herhaald aan met de teruggegeven cursor
+     * totdat er geen orders meer terugkomen.
+     *
+     * @return array{orders: array<int, array<string, mixed>>, cursor: ?string}
+     */
+    public static function fetchOrdersPage(?string $cursor = null, ?string $createdAtMin = null): array
+    {
+        $query = ['limit' => (string) self::ORDERS_PAGE_LIMIT];
+        if ($cursor !== null) {
+            $query['cursor'] = $cursor;
+        }
+        if ($createdAtMin !== null) {
+            $query['created_at_min'] = $createdAtMin;
+        }
+
+        $response = self::request('GET', '/orders', $query);
+
+        return [
+            'orders' => $response['orders'] ?? [],
+            'cursor' => $response['cursor'] ?? null,
+        ];
+    }
+
+    /**
+     * Naam van de retailer (shop) die een order plaatste - een order zelf
+     * bevat alleen retailer_id, geen naam. Geeft null bij een onbekende/
+     * verwijderde retailer i.p.v. te gooien, zodat de import niet vastloopt
+     * op één ontbrekend profiel.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function fetchRetailer(string $retailerId): ?array
+    {
+        try {
+            $response = self::request('GET', '/retailers/public/' . rawurlencode($retailerId));
+
+            return $response !== [] ? $response : null;
+        } catch (\RuntimeException) {
+            return null;
+        }
     }
 
     /**
