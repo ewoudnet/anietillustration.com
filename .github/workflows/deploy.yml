@@ -35,6 +35,10 @@ jobs:
           cp deploy-htaccess-core.txt anietillustration-core/.htaccess
 
       - name: SFTP deploy
+        # timeout-minutes vangt het geval af waarin lftp tóch blijft hangen op een
+        # plek die de net:*-instellingen hieronder niet dekken - zonder dit blijft
+        # een job in het ergste geval 6 uur (de GitHub-standaard) draaien.
+        timeout-minutes: 15
         env:
           SFTP_USER: ${{ secrets.FTP_USERNAME }}
           SFTP_PASS: ${{ secrets.FTP_PASSWORD }}
@@ -42,6 +46,14 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq lftp
           cat > deploy.lftp <<EOF
           set sftp:auto-confirm yes
+          # Zonder deze drie probeert lftp een mislukte verbinding oneindig opnieuw
+          # zonder iets te loggen: op 2026-08-12 leverde dat 27 minuten volledige
+          # stilte op voordat de job handmatig afgebroken werd. Nu faalt hij na
+          # ~1 minuut met een leesbare foutmelding in plaats van te blijven hangen.
+          set net:timeout 20
+          set net:max-retries 3
+          set net:reconnect-interval-base 5
+          set cmd:fail-exit yes
           open -u "$SFTP_USER","$SFTP_PASS" sftp://ftp.aniet.nl:22
           mirror -R --verbose --exclude-glob .git/ --exclude-glob .github/ --exclude-glob .claude/ --exclude-glob docs/ --exclude-glob sql/ --exclude-glob "*.log" --exclude-glob .env --exclude-glob .env.example --exclude-glob CLAUDE.md --exclude-glob composer.json --exclude-glob composer.lock --exclude-glob deploy-htaccess-core.txt --exclude-glob "README*" ./ .
           bye
