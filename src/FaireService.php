@@ -42,6 +42,17 @@ namespace App;
  * FAIRE_ACCESS_TOKEN (GET /orders en GET /retailers/public/{id} gaven beide
  * 200 OK terug, zelfde X-FAIRE-ACCESS-TOKEN-header werkt voor alle
  * endpoints). Zie docs/wholesale.md voor de volledige veldmapping.
+ *
+ * PATCH /product-inventory/by-skus (fase D, voorraad SCHRIJVEN) is op
+ * 2026-08-12 opgezocht via diezelfde `apidescriptiondocument`-truc (verse
+ * data, niet uit documentatietekst afgeleid): body is
+ * {"inventories": [{"sku": "...", "on_hand_quantity": 42}, ...]} - dus
+ * `on_hand_quantity`, niet `current_quantity` (dat laatste circuleert in
+ * losse blogposts over de Faire-API maar staat niet in de echte spec).
+ * Alleen schema-geverifieerd, NOG NIET live getest (dat zou een echte
+ * voorraadwijziging op de live Faire-listing betekenen) - blijft daarom
+ * achter de sync_enabled-schakelaar (zie WholesaleStockSyncService) totdat
+ * er bewust, met een enkele lage-impact-SKU, een echte test gedaan wordt.
  */
 final class FaireService
 {
@@ -77,6 +88,45 @@ final class FaireService
                 $available = $inventory['available_quantity'] ?? null;
                 $result[$sku] = (is_array($available) && ($available['type'] ?? null) === 'QUANTITY')
                     ? (int) $available['quantity']
+                    : null;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Schrijft voorraadaantallen terug naar Faire (fase D). Roep dit alleen aan
+     * als het platform sync_enabled=1 heeft - deze methode zelf controleert dat
+     * niet, dat is de verantwoordelijkheid van de aanroeper (WholesaleStockSyncService).
+     *
+     * @param array<string, int> $skuToQuantity sku => nieuwe voorraad
+     * @return array<string, int|null> sku => bevestigde voorraad zoals Faire teruggeeft
+     */
+    public static function updateInventoryBySkus(array $skuToQuantity): array
+    {
+        $skuToQuantity = array_filter(
+            $skuToQuantity,
+            static fn (int $qty, string $sku): bool => $sku !== '',
+            ARRAY_FILTER_USE_BOTH
+        );
+        if ($skuToQuantity === []) {
+            return [];
+        }
+
+        $result = [];
+        foreach (array_chunk($skuToQuantity, self::SKUS_PER_REQUEST, true) as $chunk) {
+            $inventories = [];
+            foreach ($chunk as $sku => $qty) {
+                $inventories[] = ['sku' => $sku, 'on_hand_quantity' => $qty];
+            }
+
+            $response = self::request('PATCH', '/product-inventory/by-skus', [], ['inventories' => $inventories]);
+
+            foreach ($response['inventories'] ?? [] as $sku => $inventory) {
+                $onHand = $inventory['on_hand_quantity'] ?? null;
+                $result[$sku] = (is_array($onHand) && ($onHand['type'] ?? null) === 'QUANTITY')
+                    ? (int) $onHand['quantity']
                     : null;
             }
         }
@@ -132,9 +182,10 @@ final class FaireService
      * @param array<string, string|array<int, string>> $query waarde als array levert een
      *                                                         herhaalde query-parameter op
      *                                                         (key=item1&key=item2&...)
+     * @param array<string, mixed>|null $body als gezet, meegestuurd als JSON-body (PATCH/POST)
      * @return array<string, mixed>
      */
-    private static function request(string $method, string $path, array $query = []): array
+    private static function request(string $method, string $path, array $query = [], ?array $body = null): array
     {
         if (!self::isConfigured()) {
             throw new \RuntimeException(
@@ -153,16 +204,26 @@ final class FaireService
             $url .= '?' . implode('&', $pairs);
         }
 
-        $curl = curl_init($url);
-        curl_setopt_array($curl, [
+        $headers = [
+            'X-FAIRE-ACCESS-TOKEN: ' . Config::get('FAIRE_ACCESS_TOKEN', ''),
+            'Accept: application/json',
+        ];
+
+        $options = [
             CURLOPT_CUSTOMREQUEST => $method,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'X-FAIRE-ACCESS-TOKEN: ' . Config::get('FAIRE_ACCESS_TOKEN', ''),
-                'Accept: application/json',
-            ],
             CURLOPT_TIMEOUT => 20,
-        ]);
+        ];
+
+        if ($body !== null) {
+            $headers[] = 'Content-Type: application/json';
+            $options[CURLOPT_POSTFIELDS] = json_encode($body);
+        }
+
+        $options[CURLOPT_HTTPHEADER] = $headers;
+
+        $curl = curl_init($url);
+        curl_setopt_array($curl, $options);
 
         $response = curl_exec($curl);
         $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);

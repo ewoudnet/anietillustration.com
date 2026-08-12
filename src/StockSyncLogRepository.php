@@ -6,9 +6,8 @@ namespace App;
 
 /**
  * Auditlog van voorraadwijzigingen (wie/wat/waardoor) - zie docs/wholesale.md.
- * Wordt gevuld door de nog te bouwen StockSyncService (fase C+); deze
- * repository is er al zodat de log-viewer (backend/wholesale/sync-log.php) nu
- * al tegen de echte tabel kan draaien.
+ * Gevuld door WholesaleStockSyncService (fase D, outbound naar Faire/
+ * Orderchamp) en later ook door de webhook-handlers (fase E, inbound).
  */
 final class StockSyncLogRepository
 {
@@ -24,15 +23,53 @@ final class StockSyncLogRepository
         $params[] = $limit;
 
         return Database::fetchAll(
-            "SELECT l.*, p.sku, p.title, wp.code AS platform_code, wp.name AS platform_name
+            "SELECT l.*, COALESCE(p.sku, c.sku) AS sku, COALESCE(p.title, c.title) AS title,
+                    wp.code AS platform_code, wp.name AS platform_name
              FROM stock_sync_log l
              LEFT JOIN products p ON p.id = l.product_id
+             LEFT JOIN cards c ON c.id = l.card_id
              LEFT JOIN wholesale_platforms wp ON wp.id = l.platform_id
              {$where}
              ORDER BY l.created_at DESC
              LIMIT ?",
             $types,
             $params
+        );
+    }
+
+    /**
+     * Schrijft één auditlogregel. Precies één van $productId/$cardId hoort
+     * gezet te zijn (of geen van beide voor een niet-productgebonden regel).
+     */
+    public static function log(
+        ?int $productId,
+        ?int $cardId,
+        ?int $platformId,
+        string $direction,
+        string $triggerType,
+        ?int $oldStock,
+        ?int $newStock,
+        bool $success,
+        bool $dryRun,
+        ?string $errorMessage
+    ): void {
+        Database::run(
+            'INSERT INTO stock_sync_log
+                (product_id, card_id, platform_id, direction, trigger_type, old_stock, new_stock, success, dry_run, error_message)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'iiissiiiis',
+            [
+                $productId,
+                $cardId,
+                $platformId,
+                $direction,
+                $triggerType,
+                $oldStock,
+                $newStock,
+                $success ? 1 : 0,
+                $dryRun ? 1 : 0,
+                $errorMessage,
+            ]
         );
     }
 

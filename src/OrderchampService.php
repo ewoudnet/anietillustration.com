@@ -24,6 +24,19 @@ namespace App;
  *   eigenaardigheden die niet uit de schema-docs te halen waren staan
  *   gedocumenteerd bij fetchOrdersPage().
  *
+ * `inventoryLevelBulkAdjust` (fase D, voorraad SCHRIJVEN) opgezocht op
+ * 2026-08-12 via de publieke schema-referentie (developers.orderchamp.com/
+ * manage-inventory + developers.orderchamp.com/mutations/
+ * inventoryLevelBulkAdjust). Belangrijk: dit is standaard een RELATIEVE
+ * aanpassing (`adjustment` telt op/af bij de huidige voorraad) - om een
+ * ABSOLUTE waarde te zetten (wat wij nodig hebben, want we schrijven onze
+ * eigen `current_stock` terug) moet `action: SET` expliciet mee, anders
+ * verdubbelt de voorraad bij elke sync in plaats van gelijk te trekken.
+ * Alleen schema-geverifieerd, NOG NIET live getest (dat zou een echte
+ * voorraadwijziging bij Orderchamp betekenen) - blijft daarom achter de
+ * sync_enabled-schakelaar (zie WholesaleStockSyncService) totdat er bewust,
+ * met een enkele lage-impact-SKU, een echte test gedaan wordt.
+ *
  * Credential hoort in .env (ORDERCHAMP_ACCESS_TOKEN), niet hier.
  */
 final class OrderchampService
@@ -180,6 +193,73 @@ final class OrderchampService
 
             foreach ($response['data']['productVariants']['nodes'] ?? [] as $node) {
                 $result[$node['sku']] = $node['inventoryQuantity'] !== null ? (int) $node['inventoryQuantity'] : null;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Schrijft voorraadaantallen terug naar Orderchamp (fase D). Roep dit
+     * alleen aan als het platform sync_enabled=1 heeft - deze methode zelf
+     * controleert dat niet, dat is de verantwoordelijkheid van de aanroeper
+     * (WholesaleStockSyncService). `action: SET` maakt van `adjustment` een
+     * absolute waarde i.p.v. een relatieve op-/aftelling.
+     *
+     * @param array<string, int> $skuToQuantity sku => nieuwe voorraad
+     * @return array<string, int> sku => bevestigde voorraad zoals Orderchamp teruggeeft
+     */
+    public static function updateInventoryBySkus(array $skuToQuantity): array
+    {
+        $skuToQuantity = array_filter(
+            $skuToQuantity,
+            static fn (int $qty, string $sku): bool => $sku !== '',
+            ARRAY_FILTER_USE_BOTH
+        );
+        if ($skuToQuantity === []) {
+            return [];
+        }
+
+        $query = <<<'GRAPHQL'
+            mutation WholesaleInventoryBulkAdjust($input: InventoryLevelBulkAdjustInput!) {
+                inventoryLevelBulkAdjust(input: $input) {
+                    userErrors {
+                        field
+                        message
+                    }
+                    inventoryLevels {
+                        quantity
+                        productVariant {
+                            sku
+                        }
+                    }
+                }
+            }
+            GRAPHQL;
+
+        $result = [];
+        foreach (array_chunk($skuToQuantity, self::INVENTORY_SKUS_PER_REQUEST, true) as $chunk) {
+            $inventoryLevels = [];
+            foreach ($chunk as $sku => $qty) {
+                $inventoryLevels[] = ['sku' => $sku, 'adjustment' => $qty, 'action' => 'SET'];
+            }
+
+            $response = self::request($query, ['input' => ['inventoryLevels' => $inventoryLevels]]);
+            $payload = $response['data']['inventoryLevelBulkAdjust'] ?? ['userErrors' => [], 'inventoryLevels' => []];
+
+            if (!empty($payload['userErrors'])) {
+                $messages = array_map(
+                    static fn (array $e): string => (string) ($e['message'] ?? 'onbekende fout'),
+                    $payload['userErrors']
+                );
+                throw new \RuntimeException('Orderchamp voorraad-update gaf een fout terug: ' . implode('; ', $messages));
+            }
+
+            foreach ($payload['inventoryLevels'] ?? [] as $level) {
+                $sku = $level['productVariant']['sku'] ?? null;
+                if ($sku !== null) {
+                    $result[$sku] = (int) $level['quantity'];
+                }
             }
         }
 

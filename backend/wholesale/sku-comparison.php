@@ -11,12 +11,15 @@ use App\ProductPlatformListingRepository;
 use App\ProductRepository;
 use App\WholesalePlatformRepository;
 use App\WholesaleStockChecker;
+use App\WholesaleStockSyncService;
 
 Auth::requireSection('wholesale');
 
 $csrfToken = Csrf::token();
 $checkErrors = [];
 $checkResult = null;
+$syncErrors = [];
+$syncResult = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check_stock') {
     if (!Auth::isAdmin()) {
@@ -29,6 +32,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
         $checkErrors[] = 'Je sessie is verlopen. Probeer het opnieuw.';
     } else {
         $checkResult = WholesaleStockChecker::run();
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'sync_stock') {
+    if (!Auth::isAdmin()) {
+        http_response_code(403);
+        echo '403 - Alleen beheerders kunnen voorraad synchroniseren.';
+        exit;
+    }
+
+    if (!Csrf::verify((string) ($_POST['csrf_token'] ?? ''))) {
+        $syncErrors[] = 'Je sessie is verlopen. Probeer het opnieuw.';
+    } else {
+        $syncResult = WholesaleStockSyncService::run();
     }
 }
 
@@ -74,8 +91,10 @@ require __DIR__ . '/../partials/layout-start.php';
     <p class="hint">
         Toont per product/kaart of het op Faire en Orderchamp geplaatst is, en
         of de laatst geziene voorraad daar overeenkomt met de eigen voorraad.
-        Dit past nooit de eigen voorraad aan - dat volgt in een latere
-        bouwfase; hier wordt alleen gelezen en vergeleken.
+        Dit past nooit de eigen voorraad aan. "Synchroniseer voorraad naar
+        platformen" schrijft wel de andere kant op: de eigen voorraad naar
+        platformen met een afwijkend aantal - zolang synchronisatie in de
+        instellingen op "Uit" staat, is dat een proefdraai die alleen logt.
     </p>
 
     <?php if (!empty($checkErrors)): ?>
@@ -99,12 +118,40 @@ require __DIR__ . '/../partials/layout-start.php';
         <?php endforeach; ?>
     <?php endif; ?>
 
+    <?php if (!empty($syncErrors)): ?>
+        <div class="alert alert-error">
+            <ul>
+                <?php foreach ($syncErrors as $error): ?>
+                    <li><?= h($error) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($syncResult !== null): ?>
+        <?php foreach ($syncResult as $code => $platformResult): ?>
+            <?php if ($platformResult['error'] !== null): ?>
+                <div class="alert alert-error"><?= h(ucfirst($code)) ?>: <?= h($platformResult['error']) ?></div>
+            <?php elseif ($platformResult['dryRun']): ?>
+                <p class="hint">🧪 <?= h(ucfirst($code)) ?> (proefdraai, synchronisatie staat uit): <?= (int) $platformResult['synced'] ?> afwijkende SKU('s)
+                    gelogd in de <a href="sync-log.php">synchronisatielog</a> - er is niets echt verstuurd.</p>
+            <?php else: ?>
+                <p class="hint">✅ <?= h(ucfirst($code)) ?>: <?= (int) $platformResult['synced'] ?> SKU('s) echt bijgewerkt.</p>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    <?php endif; ?>
+
     <div class="row" style="align-items: center; gap: 12px;">
         <?php if (Auth::isAdmin()): ?>
             <form method="post" action="sku-comparison.php" style="display: inline-block;">
                 <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
                 <input type="hidden" name="action" value="check_stock">
                 <button type="submit" class="btn" style="width: auto;">🔄 Vernieuw voorraadvergelijking</button>
+            </form>
+            <form method="post" action="sku-comparison.php" style="display: inline-block;">
+                <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
+                <input type="hidden" name="action" value="sync_stock">
+                <button type="submit" class="btn btn-secondary" style="width: auto;" title="Schrijft de eigen voorraad terug naar platformen die als 'geplaatst' bekend staan met een afwijkend aantal. Blijft een proefdraai zolang synchronisatie op Uit staat, zie instellingen.">⬆️ Synchroniseer voorraad naar platformen</button>
             </form>
         <?php endif; ?>
         <a href="?<?= $onlyIssues ? '' : 'only_issues=1' ?>" class="btn btn-secondary" style="width: auto; display: inline-block;">

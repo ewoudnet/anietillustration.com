@@ -217,6 +217,9 @@ CREATE TABLE IF NOT EXISTS stock_sync_log (
     old_stock INT DEFAULT NULL,
     new_stock INT DEFAULT NULL,
     success TINYINT(1) NOT NULL DEFAULT 1,
+    -- 1 = proefdraai (fase D): zou verstuurd zijn, maar sync_enabled stond op 0
+    -- voor dit platform, dus is er niets echt naar de API gepost.
+    dry_run TINYINT(1) NOT NULL DEFAULT 0,
     error_message TEXT DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),

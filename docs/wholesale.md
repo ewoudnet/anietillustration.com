@@ -3,7 +3,7 @@
 ## Doel
 Twee te onderscheiden delen onder één sectienaam:
 
-1. **Faire + Orderchamp-synchronisatie (in opbouw, fase A afgerond)** — de
+1. **Faire + Orderchamp-synchronisatie (in opbouw, fase A-D afgerond)** — de
    backend-sectie "Wholesale" die orders van Faire en Orderchamp samenbrengt
    in één overzicht, de eigen database leidend maakt voor de voorraad op
    beide platformen (i.p.v. de huidige eenrichting-Faire-sync, zie
@@ -34,10 +34,12 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   `src/ProductPlatformListingRepository.php`,
   `src/StockSyncLogRepository.php` — data-toegang, mysqli-stijl (consistent
   met `ProductRepository`).
-- `src/OrderchampService.php` — GraphQL-client (`graphql()` + `isConfigured()`
-  + `fetchOrdersPage()`), schema geverifieerd via developers.orderchamp.com
-  maar **nog niet live getest** (geen `ORDERCHAMP_ACCESS_TOKEN` in .env, zie
-  onderstaande openstaande punten). Voorraad lezen/schrijven volgt in fase C/D.
+- `src/OrderchampService.php` — GraphQL-client (`request()` + `isConfigured()`
+  + `fetchOrdersPage()` + `fetchInventoryBySkus()` + `updateInventoryBySkus()`),
+  schema geverifieerd via developers.orderchamp.com, orders/inventory-lezen
+  inmiddels ook live getest (zie "Getest" hieronder) - alleen het schrijf-pad
+  (`updateInventoryBySkus()`, fase D) is nog niet live getest, bewust (zie
+  Beslissingen).
 - `src/FaireService.php` — uitgebreid met `fetchOrdersPage()` en
   `fetchRetailer()`, beide live geverifieerd tegen de echte Faire-API.
 - `src/SkuResolver.php` — matcht een externe SKU tegen `cards` óf `products`
@@ -53,6 +55,19 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   Orderchamp voor alle lokale SKU's (producten + kaarten) en schrijft de
   vergelijking naar `product_platform_listings`. Roept nooit
   `*Repository::updateCurrentStock()` aan.
+- `src/WholesaleStockSyncService.php` — fase D: schrijft voorraad terug naar
+  Faire/Orderchamp voor items die daar als "geplaatst" bekend staan
+  (`product_platform_listings.is_listed`) met een afwijkende
+  `last_seen_stock` t.o.v. de eigen `current_stock`. Blijft een proefdraai
+  (alleen loggen) zolang `wholesale_platforms.sync_enabled` op 0 staat voor
+  dat platform; roept dan `FaireService`/`OrderchampService::
+  updateInventoryBySkus()` nooit aan. Elke run schrijft een regel per item
+  naar `stock_sync_log` (via de nieuwe `StockSyncLogRepository::log()`),
+  met `dry_run` als onderscheid tussen proefdraai en echt verstuurd. Raakt
+  nooit `products.current_stock`/`cards.current_stock` (die blijven altijd
+  leidend, dit is uitsluitend uitgaande synchronisatie).
+- `sql/migrations/007_wholesale_stock_write.sql` (+ schema.sql) —
+  `stock_sync_log.dry_run` (fase D).
 - `backend/wholesale/` — `index.php` (dashboard), `orders.php` +
   `order-form.php` (overzicht + detail, zoeken op shopnaam/SKU/titel,
   filter op platform/status/periode), `orders-export.php` (Excel, zelfde
@@ -60,8 +75,11 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   van max. 50 orders, alleen voor admins), `shops.php` (kaart met Leaflet +
   OpenStreetMap-tiles), `sku-comparison.php` (matrix producten+kaarten ×
   platformen, met een "Vernieuw voorraadvergelijking"-knop die
-  `WholesaleStockChecker` aanroept, alleen voor admins), `sync-log.php`
-  (auditlog-viewer), `settings.php` (per-platform sync-aan/uit-schakelaar,
+  `WholesaleStockChecker` aanroept, en een "Synchroniseer voorraad naar
+  platformen"-knop die `WholesaleStockSyncService` aanroept - fase D, alleen
+  voor admins), `sync-log.php`
+  (auditlog-viewer, toont een 🧪 Proefdraai-badge voor `dry_run`-regels i.p.v.
+  de normale OK/Mislukt-badge), `settings.php` (per-platform sync-aan/uit-schakelaar,
   alleen voor admins).
 - `backend/bootstrap.php` — `money(int $cents, string $currency): string`
   helper (Faire/Orderchamp-orders zijn niet altijd EUR, in tegenstelling tot
@@ -85,8 +103,20 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   Orderchamp opzoekt en `product_platform_listings` bijwerkt
   (is_listed/last_seen_stock/last_verified_at). Live getest, zie "Getest"
   hieronder. Raakt nooit `products.current_stock`/`cards.current_stock`.
-- [ ] **Fase D:** voorraad schrijven, eerst dry-run (loggen zonder echt te
-  posten) achter de `sync_enabled`-schakelaar per platform.
+- [x] **Fase D (dry-run):** `sku-comparison.php` heeft nu ook een
+  "Synchroniseer voorraad naar platformen"-knop (`WholesaleStockSyncService`,
+  alleen admins) die de eigen voorraad terugschrijft naar Faire/Orderchamp
+  voor elk item dat daar als "geplaatst" bekend staat met een afwijkende
+  `last_seen_stock`. Zolang `wholesale_platforms.sync_enabled` op 0 staat
+  (nu voor beide platformen het geval) is dit een proefdraai: er wordt alleen
+  naar `stock_sync_log` gelogd (met `dry_run=1`), nooit echt naar Faire/
+  Orderchamp gepost. `FaireService::updateInventoryBySkus()` (PATCH
+  `/product-inventory/by-skus`) en `OrderchampService::
+  updateInventoryBySkus()` (`inventoryLevelBulkAdjust`-mutatie) zijn wel al
+  volledig gebouwd en schema-geverifieerd, maar bewust **nog niet live
+  getest** - dat zou een echte voorraadwijziging op de live listings
+  betekenen. Zie "Getest" en de beslissing hieronder voor waarom dat een
+  bewuste, aparte stap blijft i.p.v. hier al uitgevoerd.
 - [ ] **Fase E:** nieuwe-order-webhooks (Faire + Orderchamp) → automatische
   import + voorraadaftrek. Hergebruikt `WholesaleOrderImporter`.
 - [ ] **Fase F:** annuleringen → status omzetten + voorraad corrigeren.
@@ -106,8 +136,9 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   truc als bij de bestaande inventory-endpoint) én live getest met het
   bestaande FAIRE_ACCESS_TOKEN (200 OK, 87 echte orders succesvol
   geïmporteerd tijdens testen). Voorraad-terugschrijven (`PATCH
-  /product-inventory/by-skus` bestaat, zie de spec) is nog niet gebruikt/
-  getest - volgt in fase D.
+  /product-inventory/by-skus`, nu gebouwd als `FaireService::
+  updateInventoryBySkus()`, fase D) is schema-geverifieerd maar bewust nog
+  niet live getest - zie Beslissingen.
 - [ ] Geocoding van shopadressen (OpenStreetMap Nominatim) → `shops.lat/lng`.
   Let op: Faire levert ISO alpha-3 landcodes, Orderchamp alpha-2 - bewust
   ongenormaliseerd opgeslagen in `shops.country_code` (VARCHAR(3)).
@@ -117,6 +148,57 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   een go-beslissing en een niet-verwarrende naam naast deze sectie.
 
 ## Getest
+**Fase D (2026-08-12):** eerst de exacte requestvorm van beide schrijf-
+endpoints opgezocht tegen de echte, publieke bronnen (niet uit losse
+blogposts/derde partijen, die bleken deels af te wijken - zie de beslissing
+hieronder): Faire's PATCH `/product-inventory/by-skus` via dezelfde
+`apidescriptiondocument`-attribuut-truc als de bestaande endpoints (levert
+`on_hand_quantity`, niet het elders gesuggereerde `current_quantity`), en
+Orderchamp's `inventoryLevelBulkAdjust`-mutatie via de publieke
+schema-referentie (developers.orderchamp.com/manage-inventory +
+.../mutations/inventoryLevelBulkAdjust) - `action: SET` is verplicht om een
+absolute waarde te zetten, anders is `adjustment` relatief.
+
+Daarna, tegen een nieuwe wegwerp-database (ditmaal ook met wegwerp-stubs voor
+`products`/`cards`/`product_types`/`sales_channels`/`users`/`sections`, omdat
+dit keer ook de backend-UI zelf gedraaid moest worden): 1 testproduct en 1
+testkaart met een bewust afwijkende `product_platform_listings.last_seen_stock`
+(product bij Faire, kaart bij Orderchamp), plus een niet-afwijkende en een
+niet-geplaatste listing als negatieve controle. Drie testruns van
+`WholesaleStockSyncService::run()` rechtstreeks (buiten de UI om):
+1. Beide platformen op `sync_enabled=0` → beide items correct als proefdraai
+   gelogd (`dry_run=1`, `success=1`, `old_stock`/`new_stock` correct), de
+   niet-afwijkende en niet-geplaatste listing terecht overgeslagen,
+   `products.current_stock`/`cards.current_stock` ongewijzigd.
+2. Herhaald zonder tussentijdse wijziging → exact dezelfde uitkomst
+   (idempotent; een proefdraai past `product_platform_listings` niet aan, dus
+   blijft de afwijking bestaan totdat een echte sync of een nieuwe
+   fase-C-check die bijwerkt).
+3. Faire op `sync_enabled=1` gezet maar zonder credentials → nette
+   `RuntimeException` ("credentials nog niet ingesteld"), gelogd met
+   `success=0, dry_run=0` en de foutmelding in `error_message`, geen crash,
+   `product_platform_listings` niet aangepast. Orderchamp (nog steeds
+   `sync_enabled=0`) draaide in dezelfde run gewoon door als proefdraai -
+   bevestigt dat een fout op het ene platform het andere niet blokkeert.
+
+Daarna dezelfde scenario's via de echte backend-UI (`php -S` met een
+tijdelijke, teruggezette `.env` naar de wegwerp-database - de originele
+`.env` vooraf gehasht en na afloop byte-voor-byte teruggezet): login,
+`sku-comparison.php` toont de juiste "Geplaatst"/"Voorraad wijkt
+af"/"Niet geplaatst"-badges, de nieuwe "Synchroniseer voorraad naar
+platformen"-knop toont zowel de 🧪 proefdraai-melding (Orderchamp) als de
+live-foutmelding (Faire, geen credentials) na één druk op de knop, en
+`sync-log.php` toont de nieuwe 🧪 Proefdraai-badge naast de bestaande
+OK/Mislukt-badges. Geen PHP-fouten op `sku-comparison.php`, `sync-log.php` of
+`settings.php`.
+
+**Bewust niet getest:** een echte PATCH/mutatie-aanroep tegen de live Faire-
+of Orderchamp-API. In tegenstelling tot de read-only endpoints uit fase
+A/B/C zou dat een echte wijziging in een extern systeem betekenen (mogelijk
+zichtbaar voor echte retailers) - dat vraagt om een bewuste, aparte test met
+een enkele lage-impact-SKU zodra de gebruiker daarvoor kiest, niet iets om
+terloops tijdens het bouwen te doen.
+
 **Fase A (2026-08-12):** losstaande, wegwerpbare MariaDB-container (niet de
 live database) via `php -S`: login, alle nieuwe `backend/wholesale/`-pagina's
 (200, geen PHP-fouten), zoeken/filteren op orders.php (shopnaam/SKU/titel,
@@ -257,6 +339,40 @@ runs ongewijzigd (expliciet gecontroleerd). Ook getest: een niet-admin krijgt
   `product-inventory/by-skus`). Geen actie nodig, maar goed om te weten bij
   het interpreteren van "niet geplaatst" in `sku-comparison.php`: dat kan ook
   betekenen "SKU is bij Faire hernoemd", niet alleen "nooit geplaatst".
+  **Datum:** 2026-08-12
+
+- **Beslissing:** `stock_sync_log` kreeg een losse `dry_run`-kolom
+  (migratie 007) i.p.v. proefdraaien te herkennen aan bijv. een speciale
+  `trigger_type` of misbruik van `error_message`.
+  **Waarom:** een proefdraai is geen fout (`success` blijft 1) en geen apart
+  soort aanleiding (`trigger_type` blijft `reconciliation`, dezelfde
+  discrepantie-detectie als een echte sync) - het is een orthogonale
+  eigenschap ("is dit echt verstuurd?"). Een aparte kolom houdt de
+  log-viewer (`sync-log.php`) en toekomstige rapportages eenvoudig, i.p.v. op
+  stringpatronen in `error_message` te moeten matchen.
+  **Datum:** 2026-08-12
+- **Beslissing:** de daadwerkelijke PATCH/mutatie-aanroepen naar Faire
+  (`on_hand_quantity`) en Orderchamp (`inventoryLevelBulkAdjust` met
+  `action: SET`) zijn gebouwd en schema-geverifieerd, maar bewust nog niet
+  tegen de live API getest.
+  **Waarom:** read-only endpoints live testen (fase A/B/C) is veilig omdat er
+  niets wijzigt; een schrijf-endpoint testen betekent per definitie een
+  echte voorraadwijziging op een marktplaats-listing die retailers kunnen
+  zien. Dat hoort een bewuste, geïsoleerde stap te zijn (één lage-impact-SKU,
+  vooraf en achteraf gecontroleerd) wanneer de gebruiker daarvoor kiest, niet
+  iets wat impliciet meelift in het bouwen van fase D. Zolang
+  `sync_enabled=0` blijft (de huidige productiestatus voor beide platformen)
+  raakt de code dit pad sowieso nooit aan.
+  **Datum:** 2026-08-12
+- **Bevinding (geen bug, wel belangrijk):** losse, niet-officiële bronnen
+  over de Faire-schrijfAPI (blogposts, derde-partij-tools) noemen het veld
+  `current_quantity`; de echte, actuele OpenAPI-spec
+  (`apidescriptiondocument`-attribuut, zie de bestaande truc in
+  `FaireService`) zegt `on_hand_quantity`.
+  **Waarom:** verklaart waarom losse voorbeelden op internet niet blind
+  overgenomen zijn voor deze integratie - steeds teruggevallen op de
+  ingebedde spec zelf, net als bij de eerder gedocumenteerde SKU-query-
+  parameter-eigenaardigheid.
   **Datum:** 2026-08-12
 
 ## Zie ook

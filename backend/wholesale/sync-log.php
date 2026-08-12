@@ -101,7 +101,9 @@ require __DIR__ . '/../partials/layout-start.php';
                         <td><?= h($triggerLabels[$entry['trigger_type']] ?? $entry['trigger_type']) ?></td>
                         <td><?= $entry['old_stock'] !== null ? (int) $entry['old_stock'] : '—' ?> &rarr; <?= $entry['new_stock'] !== null ? (int) $entry['new_stock'] : '—' ?></td>
                         <td>
-                            <?php if ((int) $entry['success'] === 1): ?>
+                            <?php if ((int) ($entry['dry_run'] ?? 0) === 1): ?>
+                                <span class="badge badge-off" title="Synchronisatie stond op 'Uit' voor dit platform - er is niets echt verstuurd.">🧪 Proefdraai</span>
+                            <?php elseif ((int) $entry['success'] === 1): ?>
                                 <span class="badge badge-on">OK</span>
                             <?php else: ?>
                                 <span class="badge badge-failed" title="<?= h($entry['error_message'] ?? '') ?>">Mislukt</span>
