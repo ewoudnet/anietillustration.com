@@ -6,11 +6,31 @@ require __DIR__ . '/../bootstrap.php';
 
 use App\Auth;
 use App\CardRepository;
+use App\Csrf;
 use App\ProductPlatformListingRepository;
 use App\ProductRepository;
 use App\WholesalePlatformRepository;
+use App\WholesaleStockChecker;
 
 Auth::requireSection('wholesale');
+
+$csrfToken = Csrf::token();
+$checkErrors = [];
+$checkResult = null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check_stock') {
+    if (!Auth::isAdmin()) {
+        http_response_code(403);
+        echo '403 - Alleen beheerders kunnen de voorraad controleren.';
+        exit;
+    }
+
+    if (!Csrf::verify((string) ($_POST['csrf_token'] ?? ''))) {
+        $checkErrors[] = 'Je sessie is verlopen. Probeer het opnieuw.';
+    } else {
+        $checkResult = WholesaleStockChecker::run();
+    }
+}
 
 $platforms = WholesalePlatformRepository::findAll();
 $listingsByProduct = ProductPlatformListingRepository::allGroupedByProduct();
@@ -54,12 +74,43 @@ require __DIR__ . '/../partials/layout-start.php';
     <p class="hint">
         Toont per product/kaart of het op Faire en Orderchamp geplaatst is, en
         of de laatst geziene voorraad daar overeenkomt met de eigen voorraad.
-        Zolang er nog geen platformkoppeling actief is (fase C+), staat hier
-        voor elk item "niet geplaatst" - dat is verwacht, geen fout.
+        Dit past nooit de eigen voorraad aan - dat volgt in een latere
+        bouwfase; hier wordt alleen gelezen en vergeleken.
     </p>
-    <a href="?<?= $onlyIssues ? '' : 'only_issues=1' ?>" class="btn btn-secondary" style="width: auto; display: inline-block;">
-        <?= $onlyIssues ? 'Toon alles' : 'Toon alleen items met een afwijking' ?>
-    </a>
+
+    <?php if (!empty($checkErrors)): ?>
+        <div class="alert alert-error">
+            <ul>
+                <?php foreach ($checkErrors as $error): ?>
+                    <li><?= h($error) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($checkResult !== null): ?>
+        <?php foreach ($checkResult as $code => $platformResult): ?>
+            <?php if ($platformResult['error'] !== null): ?>
+                <div class="alert alert-error"><?= h(ucfirst($code)) ?>: <?= h($platformResult['error']) ?></div>
+            <?php else: ?>
+                <p class="hint"><?= h(ucfirst($code)) ?>: <?= (int) $platformResult['checked'] ?> SKU's gecontroleerd,
+                    <?= (int) $platformResult['listed'] ?> geplaatst gevonden.</p>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    <?php endif; ?>
+
+    <div class="row" style="align-items: center; gap: 12px;">
+        <?php if (Auth::isAdmin()): ?>
+            <form method="post" action="sku-comparison.php" style="display: inline-block;">
+                <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
+                <input type="hidden" name="action" value="check_stock">
+                <button type="submit" class="btn" style="width: auto;">🔄 Vernieuw voorraadvergelijking</button>
+            </form>
+        <?php endif; ?>
+        <a href="?<?= $onlyIssues ? '' : 'only_issues=1' ?>" class="btn btn-secondary" style="width: auto; display: inline-block;">
+            <?= $onlyIssues ? 'Toon alles' : 'Toon alleen items met een afwijking' ?>
+        </a>
+    </div>
 </div>
 
 <div class="card">

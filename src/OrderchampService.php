@@ -14,13 +14,15 @@ namespace App;
  *   supplier-backoffice), niet de OAuth-flow (die is voor apps die door
  *   meerdere Orderchamp-accounts geïnstalleerd worden, niet van toepassing
  *   op onze eigen shop).
- * - Schema geverifieerd op 2026-08-12 via de publieke, statisch-gegenereerde
+ * - Schema geverifieerd via de publieke, statisch-gegenereerde
  *   schema-referentie op developers.orderchamp.com (types/Order,
  *   types/OrderStatus, types/OrderProduct, types/Customer, types/Address,
- *   types/CountryCode, queries/orders, authentication, rate-limits) - NIET
- *   live getest (er is nog geen ORDERCHAMP_ACCESS_TOKEN in .env, zie
- *   docs/wholesale.md). Verifieer de eerste echte respons zorgvuldig zodra
- *   het token is ingesteld.
+ *   types/CountryCode, types/ProductVariant, queries/orders,
+ *   queries/productVariants, authentication, rate-limits).
+ * - Orders/klant-velden en productVariants(skus:...) zijn op 2026-08-12 live
+ *   geverifieerd tegen de echte API (zie docs/wholesale.md) - twee
+ *   eigenaardigheden die niet uit de schema-docs te halen waren staan
+ *   gedocumenteerd bij fetchOrdersPage().
  *
  * Credential hoort in .env (ORDERCHAMP_ACCESS_TOKEN), niet hier.
  */
@@ -28,6 +30,7 @@ final class OrderchampService
 {
     private const ENDPOINT = 'https://api.orderchamp.com/v1/graphql';
     private const ORDERS_PAGE_LIMIT = 50;
+    private const INVENTORY_SKUS_PER_REQUEST = 100;
 
     public static function isConfigured(): bool
     {
@@ -136,6 +139,51 @@ final class OrderchampService
             'cursor' => $connection['pageInfo']['endCursor'] ?? null,
             'hasNextPage' => (bool) ($connection['pageInfo']['hasNextPage'] ?? false),
         ];
+    }
+
+    /**
+     * Haalt de beschikbare voorraad op voor een lijst SKU's - zelfde
+     * signatuur/semantiek als FaireService::fetchInventoryBySkus(): SKU's die
+     * niet in de respons voorkomen, staan niet in de returnwaarde (niet
+     * geplaatst bij Orderchamp onder die SKU).
+     *
+     * Live geverifieerd op 2026-08-12: `skus`-filter op `productVariants`
+     * werkt zoals verwacht, kost per SKU is triviaal (100 SKU's = kost 100,
+     * ruim onder de limiet van 2000) - vandaar dezelfde batchgrootte als
+     * Faire (100), niet omdat het hier ook nodig was.
+     *
+     * @param array<int, string> $skus
+     * @return array<string, int|null> sku => beschikbare voorraad, of null als Orderchamp
+     *                                  geen aantal bijhoudt voor die variant
+     */
+    public static function fetchInventoryBySkus(array $skus): array
+    {
+        $skus = array_values(array_unique(array_filter($skus, static fn (string $s): bool => $s !== '')));
+        if ($skus === []) {
+            return [];
+        }
+
+        $query = <<<'GRAPHQL'
+            query WholesaleInventory($skus: [String], $first: Int) {
+                productVariants(skus: $skus, first: $first) {
+                    nodes {
+                        sku
+                        inventoryQuantity
+                    }
+                }
+            }
+            GRAPHQL;
+
+        $result = [];
+        foreach (array_chunk($skus, self::INVENTORY_SKUS_PER_REQUEST) as $chunk) {
+            $response = self::request($query, ['skus' => $chunk, 'first' => count($chunk)]);
+
+            foreach ($response['data']['productVariants']['nodes'] ?? [] as $node) {
+                $result[$node['sku']] = $node['inventoryQuantity'] !== null ? (int) $node['inventoryQuantity'] : null;
+            }
+        }
+
+        return $result;
     }
 
     /**

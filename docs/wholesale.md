@@ -46,14 +46,23 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   het eigen model en schrijft ze weg (shop + order + regels); wordt ook
   hergebruikt voor de nieuwe-order-webhooks in fase E. Roept nooit
   voorraadcode aan.
+- `src/OrderchampService.php` — `fetchInventoryBySkus()` toegevoegd, zelfde
+  signatuur/semantiek als `FaireService::fetchInventoryBySkus()`, live
+  geverifieerd.
+- `src/WholesaleStockChecker.php` — fase C: leest voorraad bij Faire +
+  Orderchamp voor alle lokale SKU's (producten + kaarten) en schrijft de
+  vergelijking naar `product_platform_listings`. Roept nooit
+  `*Repository::updateCurrentStock()` aan.
 - `backend/wholesale/` — `index.php` (dashboard), `orders.php` +
   `order-form.php` (overzicht + detail, zoeken op shopnaam/SKU/titel,
   filter op platform/status/periode), `orders-export.php` (Excel, zelfde
   `XlsxWriter` als [[orders]]), `import.php` (historische import, per pagina
   van max. 50 orders, alleen voor admins), `shops.php` (kaart met Leaflet +
   OpenStreetMap-tiles), `sku-comparison.php` (matrix producten+kaarten ×
-  platformen), `sync-log.php` (auditlog-viewer), `settings.php` (per-platform
-  sync-aan/uit-schakelaar, alleen voor admins).
+  platformen, met een "Vernieuw voorraadvergelijking"-knop die
+  `WholesaleStockChecker` aanroept, alleen voor admins), `sync-log.php`
+  (auditlog-viewer), `settings.php` (per-platform sync-aan/uit-schakelaar,
+  alleen voor admins).
 - `backend/bootstrap.php` — `money(int $cents, string $currency): string`
   helper (Faire/Orderchamp-orders zijn niet altijd EUR, in tegenstelling tot
   specials, dus geen hardcoded "€" in de wholesale-pagina's).
@@ -70,9 +79,12 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   dezelfde rijen i.p.v. te dupliceren). Beide platformen live geverifieerd
   (zie "Getest" hieronder). Raakt nooit `products.current_stock`/
   `cards.current_stock` (expliciet getest).
-- [ ] **Fase C:** voorraad lezen — Faire-inventory-call ontsluiten in het
-  vergelijkingsoverzicht; Orderchamp-lezen nieuw bouwen zodra de
-  GraphQL-koppeling er is.
+- [x] **Fase C (voorraad lezen):** `sku-comparison.php` heeft nu een
+  "Vernieuw voorraadvergelijking"-knop (`WholesaleStockChecker`, alleen
+  admins) die alle lokale SKU's (producten + kaarten) bij Faire én
+  Orderchamp opzoekt en `product_platform_listings` bijwerkt
+  (is_listed/last_seen_stock/last_verified_at). Live getest, zie "Getest"
+  hieronder. Raakt nooit `products.current_stock`/`cards.current_stock`.
 - [ ] **Fase D:** voorraad schrijven, eerst dry-run (loggen zonder echt te
   posten) achter de `sync_enabled`-schakelaar per platform.
 - [ ] **Fase E:** nieuwe-order-webhooks (Faire + Orderchamp) → automatische
@@ -148,6 +160,21 @@ echte read-only import van 86 orders + 47 shops over 2 batches, dezelfde
 idempotentie-/SKU-matching-/voorraad-ongewijzigd-checks als bij Faire, en
 dezelfde UI-render-check - allemaal succesvol.
 
+**Fase C (2026-08-12):** eerst `productVariants(skus: [...])` los tegen de
+echte Orderchamp-API getest (werkt, kost triviaal - 100 SKU's kost 100 van de
+2000-limiet). Daarna, tegen een nieuwe wegwerp-database, 3 testkaarten
+aangemaakt met bekende SKU's uit de fase B-testdata (`20230904`, `231005`,
+en een verzonnen niet-bestaande SKU) en de "Vernieuw voorraadvergelijking"-
+knop echt uitgevoerd tegen zowel Faire als Orderchamp. Resultaat klopte
+precies: `20230904` bleek bij Faire een afwijkende voorraad te hebben (105 vs.
+onze 30) en bij Orderchamp exact te matchen; `231005` bleek bij Faire
+inmiddels **niet meer gevonden** te worden (zie beslissing hieronder) maar
+bij Orderchamp nog wel (voorraad 0, wijkt af van onze 999); de verzonnen SKU
+correct "niet geplaatst" op beide. Idempotent (herhaald draaien gaf exact
+dezelfde 6 rijen, geen duplicaten) en `cards.current_stock` bleef bij alle
+runs ongewijzigd (expliciet gecontroleerd). Ook getest: een niet-admin krijgt
+403 op de knop en ziet de knop niet eens.
+
 ## Beslissingen & rationale
 - **Beslissing:** Faire/Orderchamp-marktplaatsorders krijgen een eigen
   tabelset (`wholesale_orders`/`wholesale_order_items`), los van de
@@ -218,6 +245,18 @@ dezelfde UI-render-check - allemaal succesvol.
   terwijl 50 orders x 100 productregels de max. query-cost (2000) met 5100
   overschreed - 30 regels per order blijft ruim onder die limiet (1600) en is
   ruim genoeg voor dit soort kaarten/cadeau-bestellingen.
+  **Datum:** 2026-08-12
+- **Bevinding (geen bug, wel belangrijk):** een SKU die in een *historische*
+  Faire-order voorkwam, kan bij een *actuele* voorraadcheck alsnog "niet
+  geplaatst" opleveren.
+  **Waarom:** Faire's eigen documentatie zegt het expliciet bij
+  `order.items[].sku`: "This may not match the current SKU of the variant" -
+  order-items bevatten de SKU op het moment van aankoop, niet de huidige SKU.
+  Tijdens het testen van fase C bleek dit ook echt voor te komen (SKU
+  `231005`, wel in fase B-orderdata, niet meer terug te vinden via
+  `product-inventory/by-skus`). Geen actie nodig, maar goed om te weten bij
+  het interpreteren van "niet geplaatst" in `sku-comparison.php`: dat kan ook
+  betekenen "SKU is bij Faire hernoemd", niet alleen "nooit geplaatst".
   **Datum:** 2026-08-12
 
 ## Zie ook

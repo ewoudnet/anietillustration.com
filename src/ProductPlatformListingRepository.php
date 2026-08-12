@@ -59,4 +59,26 @@ final class ProductPlatformListingRepository
 
         return (int) ($row['total'] ?? 0);
     }
+
+    /**
+     * Zet de listing-status van één product/kaart op één platform, op basis van
+     * een verse voorraad-check (fase C: alleen lezen/vergelijken, past nooit
+     * products.current_stock/cards.current_stock aan). Precies één van
+     * $productId/$cardId moet gezet zijn.
+     */
+    public static function upsert(?int $productId, ?int $cardId, int $platformId, string $externalSku, bool $isListed, ?int $lastSeenStock): void
+    {
+        Database::run(
+            'INSERT INTO product_platform_listings
+                (product_id, card_id, platform_id, external_sku, is_listed, last_seen_stock, last_verified_at)
+             VALUES (?, ?, ?, ?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE
+                external_sku = VALUES(external_sku),
+                is_listed = VALUES(is_listed),
+                last_seen_stock = VALUES(last_seen_stock),
+                last_verified_at = NOW()',
+            'iiisii',
+            [$productId, $cardId, $platformId, $externalSku, $isListed ? 1 : 0, $lastSeenStock]
+        );
+    }
 }
