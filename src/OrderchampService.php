@@ -43,18 +43,35 @@ final class OrderchampService
      * moet ook geannuleerde en nog-niet-bevestigde orders zien, anders
      * ontbreken ze straks in het orderoverzicht.
      *
+     * Live geverifieerd op 2026-08-12: `since` moet volledig weggelaten worden
+     * uit de query als er geen datumfilter is - in tegenstelling tot `after`
+     * (dat werkt prima als expliciete null-variabele) geeft Orderchamp bij
+     * `since: null` een lege resultatenset terug in plaats van "geen filter"
+     * (totalCount 0 i.p.v. de 86 echte orders). Vandaar de query-opbouw hier
+     * i.p.v. één vast querytemplate.
+     *
+     * `products` is zelf ook een Relay-connection en telt daardoor vermenig-
+     * vuldigend mee in Orderchamp's query-costlimiet (max. 2000): 50 orders x
+     * 100 regels per order kostte al 5100. Bij 30 regels per order (ruim
+     * genoeg voor dit soort kaarten/cadeau-bestellingen) blijft de kost op
+     * 1600 - als een order toch meer dan 30 regels heeft, wordt dat via
+     * `hasNextPage` gedetecteerd (zie WholesaleOrderImporter) i.p.v. stil
+     * afgekapt.
+     *
      * @return array{orders: array<int, array<string, mixed>>, cursor: ?string, hasNextPage: bool}
      */
     public static function fetchOrdersPage(?string $after = null, ?string $since = null): array
     {
-        $query = <<<'GRAPHQL'
-            query WholesaleOrders($first: Int, $after: String, $since: DateTime, $includeCancelled: Boolean, $includeUnconfirmed: Boolean) {
+        $sinceArgDefinition = $since !== null ? ', $since: DateTime' : '';
+        $sinceArgUsage = $since !== null ? "\n                    since: \$since" : '';
+
+        $query = <<<GRAPHQL
+            query WholesaleOrders(\$first: Int, \$after: String, \$includeCancelled: Boolean, \$includeUnconfirmed: Boolean{$sinceArgDefinition}) {
                 orders(
-                    first: $first
-                    after: $after
-                    since: $since
-                    includeCancelled: $includeCancelled
-                    includeUnconfirmed: $includeUnconfirmed
+                    first: \$first
+                    after: \$after
+                    includeCancelled: \$includeCancelled
+                    includeUnconfirmed: \$includeUnconfirmed{$sinceArgUsage}
                     sort: CREATED_AT_ASC
                 ) {
                     nodes {
@@ -81,12 +98,15 @@ final class OrderchampService
                                 country
                             }
                         }
-                        products {
+                        products(first: 30) {
                             nodes {
                                 sku
                                 title
                                 quantity
                                 unitPrice
+                            }
+                            pageInfo {
+                                hasNextPage
                             }
                         }
                     }
@@ -101,10 +121,12 @@ final class OrderchampService
         $variables = [
             'first' => self::ORDERS_PAGE_LIMIT,
             'after' => $after,
-            'since' => $since,
             'includeCancelled' => true,
             'includeUnconfirmed' => true,
         ];
+        if ($since !== null) {
+            $variables['since'] = $since;
+        }
 
         $response = self::request($query, $variables);
         $connection = $response['data']['orders'] ?? ['nodes' => [], 'pageInfo' => ['hasNextPage' => false, 'endCursor' => null]];

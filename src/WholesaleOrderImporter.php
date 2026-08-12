@@ -177,6 +177,15 @@ final class WholesaleOrderImporter
             ];
         }
 
+        // products(first: 30) kan in theorie afkappen bij een uitzonderlijk grote
+        // order - dat mag nooit stil gebeuren, dus loggen i.p.v. negeren.
+        if ($raw['products']['pageInfo']['hasNextPage'] ?? false) {
+            error_log(sprintf(
+                'WholesaleOrderImporter: order %s heeft meer dan 30 regels bij Orderchamp - alleen de eerste 30 zijn geïmporteerd.',
+                $raw['number'] ?? $raw['id'] ?? '?'
+            ));
+        }
+
         $customer = $raw['customer'] ?? null;
         $shop = null;
         if ($customer !== null) {

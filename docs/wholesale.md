@@ -65,11 +65,11 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
 - [x] **Fase A (skelet):** datamodel, backend-sectie + navigatie, alle
   pagina's draaien tegen de echte (nog lege) tabellen.
 - [x] **Fase B (historische import):** `backend/wholesale/import.php` haalt
-  Faire-orders op (cursor-gepagineerd, max. 50 per klik) en schrijft
-  shop/order/regels weg, idempotent (herhaald importeren overschrijft dezelfde
-  rijen i.p.v. te dupliceren). Orderchamp-kant is gebouwd maar niet live
-  getest (zie hieronder). Raakt nooit `products.current_stock`/
-  `cards.current_stock` (expliciet getest, zie "Getest" hieronder).
+  Faire- én Orderchamp-orders op (cursor-gepagineerd, max. 50 per klik) en
+  schrijft shop/order/regels weg, idempotent (herhaald importeren overschrijft
+  dezelfde rijen i.p.v. te dupliceren). Beide platformen live geverifieerd
+  (zie "Getest" hieronder). Raakt nooit `products.current_stock`/
+  `cards.current_stock` (expliciet getest).
 - [ ] **Fase C:** voorraad lezen — Faire-inventory-call ontsluiten in het
   vergelijkingsoverzicht; Orderchamp-lezen nieuw bouwen zodra de
   GraphQL-koppeling er is.
@@ -81,12 +81,13 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
 - [ ] **Fase G:** live zetten per platform zodra alle producten er correct op
   staan (harde voorwaarde van de gebruiker, zie CLAUDE.md-conventie hierover
   niet apart vastgelegd maar wel leidend voor de bouwvolgorde).
-- [ ] Orderchamp: `ORDERCHAMP_ACCESS_TOKEN` nog niet in .env gezet (gebruiker
-  heeft al wel een token) — zodra dat er is, `OrderchampService::
-  fetchOrdersPage()` als eerste live verifiëren (schema is nu alleen tegen de
-  publieke schema-docs gecontroleerd, niet tegen een echte respons) en de
-  webhook-signing secret ophalen bij het registreren van de webhook
-  (fase E).
+- [x] Orderchamp: `ORDERCHAMP_ACCESS_TOKEN` staat in .env en
+  `OrderchampService::fetchOrdersPage()` is live geverifieerd (86 echte
+  orders correct geïmporteerd). Er is nog geen webhook-signing secret
+  opgehaald - volgt bij het registreren van de webhook in fase E. Er ligt
+  overigens al een oude, vermoedelijk dode webhook ("aniet_orders" →
+  `aniet.nl/beta-5/orderchamp/order...`) uit een eerdere, gestopte koppeling
+  in het Orderchamp-dashboard - die laten we met rust tot fase E.
 - [x] Faire: orders-API (`GET /orders`) en retailer-profiel (`GET /retailers/
   public/{id}`) zijn alsnog geverifieerd — de OpenAPI-spec bleek uitleesbaar
   via developers.faire.com (zelfde `apidescriptiondocument`-DOM-attribuut-
@@ -127,6 +128,25 @@ UI-check: orders.php/shops.php/sku-comparison.php renderen zonder PHP-fouten
 met deze echte data, inclusief de multi-currency-fix (één order stond in USD;
 de rest in EUR). Orderchamp-kant kon niet live getest worden (nog geen
 token in .env) - alleen tegen de publieke schema-documentatie gebouwd.
+
+**Orderchamp live verificatie (2026-08-12, zodra `ORDERCHAMP_ACCESS_TOKEN`
+was ingesteld):** zelfde aanpak als bij Faire - eerst een losse `account`
+query, toen de echte `fetchOrdersPage()`. Dit legde twee echte API-eigenaardigheden
+bloot die niet uit de schema-docs te halen waren (zie ook de beslissingen
+hieronder):
+1. `since: null` als expliciete GraphQL-variabele leverde 0 resultaten op
+   i.p.v. "geen filter" (totalCount 0 i.p.v. 86) - opgelost door `since`
+   volledig weg te laten uit de query als er geen datum is.
+2. De geneste `products`-connectie had zelf ook een `first`-argument nodig
+   (Relay-connecties vereisen dat overal), en de combinatie 50 orders x 100
+   productregels overschreed Orderchamp's max. query-cost (2000) met 5100 -
+   opgelost door naar 30 productregels per order te gaan (kost 1600),
+   gedetecteerd door zelf verschillende combinaties te testen tegen de echte
+   API.
+Na deze fixes: opnieuw een losstaande, wegwerpbare MariaDB-container, een
+echte read-only import van 86 orders + 47 shops over 2 batches, dezelfde
+idempotentie-/SKU-matching-/voorraad-ongewijzigd-checks als bij Faire, en
+dezelfde UI-render-check - allemaal succesvol.
 
 ## Beslissingen & rationale
 - **Beslissing:** Faire/Orderchamp-marktplaatsorders krijgen een eigen
@@ -184,6 +204,20 @@ token in .env) - alleen tegen de publieke schema-documentatie gebouwd.
   Faire-orders in USD te staan terwijl de fase A-UI overal een hardcoded €
   liet zien (en de omzet-som in orders.php telde EUR en USD-bedragen zomaar
   bij elkaar op) - alsnog gecorrigeerd, ook in de al gecommitte fase A-code.
+  **Datum:** 2026-08-12
+- **Beslissing:** in `OrderchampService::fetchOrdersPage()` wordt het
+  `since`-argument volledig uit de GraphQL-query weggelaten als er geen
+  datumfilter is, i.p.v. het als variabele op `null` te zetten; en de
+  geneste `products`-connectie is vastgezet op `first: 30` (met
+  `hasNextPage` gelogd als een order daar toch doorheen zou gaan).
+  **Waarom:** allebei ontdekt door live tegen de echte API te testen, niet
+  uit de schema-documentatie af te leiden. `since: null` leverde bij
+  Orderchamp een lege resultatenset op i.p.v. "geen filter" (een
+  API-eigenaardigheid, geen bug in onze code). En `products` zonder eigen
+  `first` gaf een validatiefout ("You must provide one of first or last"),
+  terwijl 50 orders x 100 productregels de max. query-cost (2000) met 5100
+  overschreed - 30 regels per order blijft ruim onder die limiet (1600) en is
+  ruim genoeg voor dit soort kaarten/cadeau-bestellingen.
   **Datum:** 2026-08-12
 
 ## Zie ook
