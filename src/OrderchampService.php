@@ -37,6 +37,25 @@ namespace App;
  * sync_enabled-schakelaar (zie WholesaleStockSyncService) totdat er bewust,
  * met een enkele lage-impact-SKU, een echte test gedaan wordt.
  *
+ * Order-webhook (fase E, zie backend/wholesale/webhook-orderchamp.php) is
+ * OPGEZOCHT (developers.orderchamp.com/manage-orders-fulfilment +
+ * .../webhooks) maar NOG NIET GEREGISTREERD bij Orderchamp - dat is een
+ * wijziging bij een externe partij en dus bewust aan de gebruiker gelaten.
+ * Twee dingen zijn daardoor nog onbevestigd (schema zegt het niet expliciet):
+ * 1. Orderchamp's docs noemen expliciet "Contact us at support@orderchamp.com
+ *    so we can create an API token for you" voor het order-webhook-gebruik -
+ *    onduidelijk of ons bestaande ORDERCHAMP_ACCESS_TOKEN (private-app-token,
+ *    zelf aangemaakt in de shop-backoffice) hiervoor al volstaat, of dat er
+ *    eerst mailcontact nodig is.
+ * 2. De signing-secret voor `X-Orderchamp-Signature` is voor een private-app
+ *    (geen OAuth-app met apart client_secret) niet expliciet gedocumenteerd -
+ *    zie ORDERCHAMP_WEBHOOK_SECRET in .env en de verificatie in
+ *    webhook-orderchamp.php, die dus ongetest is totdat er echt een webhook
+ *    geregistreerd is.
+ * De webhook-payload zelf is wel bevestigd minimaal ({"data":{"order":
+ * {"id",...}}}) - vandaar fetchOrderById() om de volledige order op te halen
+ * i.p.v. op de payload-inhoud te vertrouwen.
+ *
  * Credential hoort in .env (ORDERCHAMP_ACCESS_TOKEN), niet hier.
  */
 final class OrderchampService
@@ -152,6 +171,64 @@ final class OrderchampService
             'cursor' => $connection['pageInfo']['endCursor'] ?? null,
             'hasNextPage' => (bool) ($connection['pageInfo']['hasNextPage'] ?? false),
         ];
+    }
+
+    /**
+     * Haalt één order op via zijn Orderchamp-id - gebruikt door de
+     * order-webhook (fase E), die zelf alleen een minimale payload
+     * ({data:{order:{id, number, createdAt, updatedAt}}}) binnenkrijgt en
+     * daarna de volledige, actuele order moet opvragen. Zelfde veldenset als
+     * fetchOrdersPage() zodat WholesaleOrderImporter::normalizeOrderchampOrder()
+     * ongewijzigd voor beide paden werkt.
+     *
+     * @return array<string, mixed>|null null als de order niet (meer) bestaat
+     */
+    public static function fetchOrderById(string $id): ?array
+    {
+        $query = <<<'GRAPHQL'
+            query WholesaleOrderById($id: ID!) {
+                order(id: $id) {
+                    id
+                    number
+                    reference
+                    status
+                    currency
+                    totalPrice
+                    createdAt
+                    updatedAt
+                    cancelledAt
+                    deliveredAt
+                    confirmedAt
+                    customer {
+                        id
+                        companyName
+                        address {
+                            street
+                            houseNumber
+                            addressLine2
+                            city
+                            postalCode
+                            country
+                        }
+                    }
+                    products(first: 30) {
+                        nodes {
+                            sku
+                            title
+                            quantity
+                            unitPrice
+                        }
+                        pageInfo {
+                            hasNextPage
+                        }
+                    }
+                }
+            }
+            GRAPHQL;
+
+        $response = self::request($query, ['id' => $id]);
+
+        return $response['data']['order'] ?? null;
     }
 
     /**

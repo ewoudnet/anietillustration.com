@@ -7,13 +7,15 @@ namespace App;
 /**
  * Haalt orders op bij Faire/Orderchamp en schrijft ze naar wholesale_orders/
  * wholesale_order_items/shops. Gebruikt voor zowel de eenmalige historische
- * import (fase B) als - later - de nieuwe-order-webhooks (fase E), vandaar
- * de scheiding tussen "haal een pagina op" (FaireService/OrderchampService)
- * en "normaliseer + schrijf weg" (hier).
+ * import (fase B, import.php) als de live nieuwe-order-detectie (fase E,
+ * cron-faire.php + webhook-orderchamp.php), vandaar de scheiding tussen
+ * "haal een pagina/order op" (FaireService/OrderchampService) en
+ * "normaliseer + schrijf weg" (hier).
  *
- * Belangrijk: dit raakt NOOIT products.current_stock of cards.current_stock.
- * Voorraadaanpassing loopt uitsluitend via de nog te bouwen StockSyncService
- * (fase C+) en wordt bewust hier niet aangeroepen - zie docs/wholesale.md.
+ * Voorraadaanpassing (WholesaleStockDeductionService) gebeurt uitsluitend als
+ * de aanroeper $deductStock=true meegeeft - de historische import (fase B)
+ * geeft dit bewust NOOIT mee, want die orders zijn al lang fysiek verwerkt en
+ * zouden de voorraad ten onrechte verlagen. Zie docs/wholesale.md.
  */
 final class WholesaleOrderImporter
 {
@@ -52,7 +54,7 @@ final class WholesaleOrderImporter
     /**
      * @return array{imported: int, unmatchedSkus: array<int, string>, nextCursor: ?string, done: bool}
      */
-    public static function importFairePage(?string $cursor, ?string $createdAtMin): array
+    public static function importFairePage(?string $cursor, ?string $createdAtMin, bool $deductStock = false): array
     {
         $platform = WholesalePlatformRepository::findByCode('faire');
         if ($platform === null) {
@@ -65,7 +67,7 @@ final class WholesaleOrderImporter
 
         foreach ($page['orders'] as $raw) {
             $normalized = self::normalizeFaireOrder($raw, $retailerCache);
-            $unmatchedSkus = array_merge($unmatchedSkus, self::persist((int) $platform['id'], $normalized));
+            $unmatchedSkus = array_merge($unmatchedSkus, self::persist((int) $platform['id'], $normalized, $deductStock));
         }
 
         return [
@@ -79,7 +81,7 @@ final class WholesaleOrderImporter
     /**
      * @return array{imported: int, unmatchedSkus: array<int, string>, nextCursor: ?string, done: bool}
      */
-    public static function importOrderchampPage(?string $cursor, ?string $since): array
+    public static function importOrderchampPage(?string $cursor, ?string $since, bool $deductStock = false): array
     {
         $platform = WholesalePlatformRepository::findByCode('orderchamp');
         if ($platform === null) {
@@ -91,7 +93,7 @@ final class WholesaleOrderImporter
 
         foreach ($page['orders'] as $raw) {
             $normalized = self::normalizeOrderchampOrder($raw);
-            $unmatchedSkus = array_merge($unmatchedSkus, self::persist((int) $platform['id'], $normalized));
+            $unmatchedSkus = array_merge($unmatchedSkus, self::persist((int) $platform['id'], $normalized, $deductStock));
         }
 
         return [
@@ -100,6 +102,32 @@ final class WholesaleOrderImporter
             'nextCursor' => $page['cursor'],
             'done' => !$page['hasNextPage'],
         ];
+    }
+
+    /**
+     * Verwerkt één Orderchamp-order op basis van zijn id - gebruikt door de
+     * order-webhook (fase E), die zelf alleen een minimale payload
+     * binnenkrijgt (zie OrderchampService::fetchOrderById()). Schrijft altijd
+     * met voorraadaftrek, want dit pad bestaat per definitie alleen voor
+     * live, nieuwe/gewijzigde orders - nooit voor historische import.
+     *
+     * @return array<int, string> onopgeloste SKU's uit deze order
+     */
+    public static function importOrderchampOrderById(string $orderchampOrderId): array
+    {
+        $platform = WholesalePlatformRepository::findByCode('orderchamp');
+        if ($platform === null) {
+            throw new \RuntimeException('Platform "orderchamp" niet gevonden in wholesale_platforms - draai sql/migrations/005_wholesale_tables.sql.');
+        }
+
+        $raw = OrderchampService::fetchOrderById($orderchampOrderId);
+        if ($raw === null) {
+            throw new \RuntimeException("Orderchamp-order {$orderchampOrderId} niet gevonden via de API.");
+        }
+
+        $normalized = self::normalizeOrderchampOrder($raw);
+
+        return self::persist((int) $platform['id'], $normalized, true);
     }
 
     /**
@@ -222,8 +250,15 @@ final class WholesaleOrderImporter
      * @param array<string, mixed> $normalized
      * @return array<int, string> SKU's uit deze order die niet gematcht konden worden
      */
-    private static function persist(int $platformId, array $normalized): array
+    private static function persist(int $platformId, array $normalized, bool $deductStock = false): array
     {
+        // Vóór de upsert opzoeken - erna is niet meer te zien of dit een
+        // nieuwe order was of een statuswijziging op een bekende order (fase E).
+        $existing = $deductStock
+            ? WholesaleOrderRepository::findByPlatformAndExternalId($platformId, $normalized['external_order_id'])
+            : null;
+        $previousStockDeductedAt = $existing['stock_deducted_at'] ?? null;
+
         $shopId = null;
         if ($normalized['shop'] !== null) {
             $shopId = ShopRepository::upsert([
@@ -263,6 +298,16 @@ final class WholesaleOrderImporter
         }
 
         WholesaleOrderRepository::replaceItems($orderId, $items);
+
+        if ($deductStock) {
+            WholesaleStockDeductionService::reconcile(
+                $orderId,
+                $previousStockDeductedAt,
+                $normalized['status'],
+                $platformId,
+                $items
+            );
+        }
 
         return $unmatchedSkus;
     }

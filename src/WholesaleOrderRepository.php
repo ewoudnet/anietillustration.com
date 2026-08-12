@@ -62,6 +62,28 @@ final class WholesaleOrderRepository
         return $order;
     }
 
+    /**
+     * Haalt een bestaande order op vóór een upsert, zodat de aanroeper de
+     * vorige status/stock_deducted_at kan vergelijken met de nieuwe (fase E,
+     * zie WholesaleStockDeductionService) - anders is na de upsert niet meer
+     * te zien of dit een nieuwe order of een statuswijziging was.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function findByPlatformAndExternalId(int $platformId, string $externalOrderId): ?array
+    {
+        return Database::fetchOne(
+            'SELECT * FROM wholesale_orders WHERE platform_id = ? AND external_order_id = ?',
+            'is',
+            [$platformId, $externalOrderId]
+        );
+    }
+
+    public static function setStockDeductedAt(int $id, ?string $datetime): void
+    {
+        Database::run('UPDATE wholesale_orders SET stock_deducted_at = ? WHERE id = ?', 'si', [$datetime, $id]);
+    }
+
     public static function countUnmatchedSkus(): int
     {
         $row = Database::fetchOne(

@@ -65,7 +65,10 @@ require __DIR__ . '/../partials/layout-start.php';
         Haalt bestaande orders op bij Faire en/of Orderchamp en zet ze in het
         wholesale-orderoverzicht (incl. shops). <strong>Dit past nooit de
         voorraad aan</strong> (`products.current_stock`/`cards.current_stock`
-        blijven ongewijzigd) - dat volgt in een latere bouwfase. Elke klik
+        blijven ongewijzigd) - dit is voor historische data, die al lang
+        fysiek verwerkt is. Voorraadaftrek gebeurt alleen bij live nieuwe
+        orders, via de Faire-cron (<code>cron-faire.php</code>) en de
+        Orderchamp-webhook. Elke klik
         haalt één pagina (max. 50 orders) op; bij veel historie klik je
         "Volgende batch" net zo vaak als nodig. Herhaald importeren van
         dezelfde order overschrijft die order gewoon opnieuw (idempotent).

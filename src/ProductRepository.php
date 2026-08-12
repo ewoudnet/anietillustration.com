@@ -276,6 +276,21 @@ final class ProductRepository
     }
 
     /**
+     * Atomische op-/aftelling (i.p.v. lees-dan-schrijf) - gebruikt door
+     * WholesaleStockDeductionService (fase E) zodat een webhook en een
+     * cron-run die toevallig gelijktijdig hetzelfde product raken elkaar niet
+     * kunnen overschrijven.
+     */
+    public static function adjustCurrentStock(int $id, int $delta): void
+    {
+        Database::run(
+            'UPDATE products SET current_stock = COALESCE(current_stock, 0) + ? WHERE id = ?',
+            'ii',
+            [$delta, $id]
+        );
+    }
+
+    /**
      * @return array<string, int> sku => id, voor alle producten - gebruikt bij de Faire-sync.
      */
     public static function allIdsBySku(): array

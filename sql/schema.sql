@@ -106,6 +106,9 @@ CREATE TABLE IF NOT EXISTS wholesale_platforms (
     color VARCHAR(20) NOT NULL,
     icon VARCHAR(10) DEFAULT NULL,
     sync_enabled TINYINT(1) NOT NULL DEFAULT 0,
+    -- Hoogwatermerk voor de Faire-cronpoller (fase E) - created_at_min bij de
+    -- volgende run, vastgelegd bij de START van elke run.
+    last_synced_at DATETIME DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -171,6 +174,9 @@ CREATE TABLE IF NOT EXISTS wholesale_orders (
     raw_payload JSON DEFAULT NULL,
     imported_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     canceled_at DATETIME DEFAULT NULL,
+    -- NULL = nog niet afgeschreven van products.current_stock/cards.current_stock
+    -- (fase E, zie WholesaleStockDeductionService).
+    stock_deducted_at DATETIME DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),

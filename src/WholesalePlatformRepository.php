@@ -39,4 +39,13 @@ final class WholesalePlatformRepository
     {
         Database::run('UPDATE wholesale_platforms SET sync_enabled = ? WHERE id = ?', 'ii', [$enabled ? 1 : 0, $id]);
     }
+
+    /**
+     * Hoogwatermerk voor de Faire-cronpoller (fase E) - zie
+     * backend/wholesale/cron-faire.php.
+     */
+    public static function updateLastSyncedAt(int $id, string $datetime): void
+    {
+        Database::run('UPDATE wholesale_platforms SET last_synced_at = ? WHERE id = ?', 'si', [$datetime, $id]);
+    }
 }

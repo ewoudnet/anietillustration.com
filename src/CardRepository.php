@@ -349,6 +349,21 @@ final class CardRepository
     }
 
     /**
+     * Atomische op-/aftelling (i.p.v. lees-dan-schrijf) - gebruikt door
+     * WholesaleStockDeductionService (fase E) zodat een webhook en een
+     * cron-run die toevallig gelijktijdig dezelfde kaart raken elkaar niet
+     * kunnen overschrijven.
+     */
+    public static function adjustCurrentStock(int $id, int $delta): void
+    {
+        Database::run(
+            'UPDATE cards SET current_stock = COALESCE(current_stock, 0) + ? WHERE id = ?',
+            'ii',
+            [$delta, $id]
+        );
+    }
+
+    /**
      * @return array<string, int> sku => id, voor alle kaarten - gebruikt bij de Faire-sync.
      */
     public static function allIdsBySku(): array

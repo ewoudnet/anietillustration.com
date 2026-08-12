@@ -3,7 +3,7 @@
 ## Doel
 Twee te onderscheiden delen onder één sectienaam:
 
-1. **Faire + Orderchamp-synchronisatie (in opbouw, fase A-D afgerond)** — de
+1. **Faire + Orderchamp-synchronisatie (in opbouw, fase A-E/F afgerond)** — de
    backend-sectie "Wholesale" die orders van Faire en Orderchamp samenbrengt
    in één overzicht, de eigen database leidend maakt voor de voorraad op
    beide platformen (i.p.v. de huidige eenrichting-Faire-sync, zie
@@ -45,9 +45,19 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
 - `src/SkuResolver.php` — matcht een externe SKU tegen `cards` óf `products`
   (zelfde twee-tabellen-aanpak als de bestaande Faire-voorraadsync).
 - `src/WholesaleOrderImporter.php` — normaliseert Faire/Orderchamp-orders naar
-  het eigen model en schrijft ze weg (shop + order + regels); wordt ook
-  hergebruikt voor de nieuwe-order-webhooks in fase E. Roept nooit
-  voorraadcode aan.
+  het eigen model en schrijft ze weg (shop + order + regels); hergebruikt
+  voor zowel de historische import (fase B) als de live nieuwe-order-detectie
+  (fase E). Roept `WholesaleStockDeductionService` alleen aan als de
+  aanroeper `$deductStock=true` meegeeft.
+- `src/WholesaleStockDeductionService.php` — fase E: schrijft voorraad af bij
+  een nieuwe order, boekt terug bij annulering, idempotent via
+  `wholesale_orders.stock_deducted_at`. Logt naar `stock_sync_log` met
+  `direction='inbound'`.
+- `backend/wholesale/cron-faire.php` — publiek, secret-gated endpoint (fase
+  E) dat de Faire-cronpoll uitvoert - Faire heeft geen webhook-API.
+- `backend/wholesale/webhook-orderchamp.php` — publiek, signature-gated
+  endpoint (fase E) dat Orderchamp's order-webhook ontvangt. Nog niet
+  geregistreerd bij Orderchamp, zie Beslissingen.
 - `src/OrderchampService.php` — `fetchInventoryBySkus()` toegevoegd, zelfde
   signatuur/semantiek als `FaireService::fetchInventoryBySkus()`, live
   geverifieerd.
@@ -68,6 +78,9 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   leidend, dit is uitsluitend uitgaande synchronisatie).
 - `sql/migrations/007_wholesale_stock_write.sql` (+ schema.sql) —
   `stock_sync_log.dry_run` (fase D).
+- `sql/migrations/008_wholesale_stock_deduction.sql` (+ schema.sql) —
+  `wholesale_orders.stock_deducted_at` + `wholesale_platforms.last_synced_at`
+  (fase E).
 - `backend/wholesale/` — `index.php` (dashboard), `orders.php` +
   `order-form.php` (overzicht + detail, zoeken op shopnaam/SKU/titel,
   filter op platform/status/periode), `orders-export.php` (Excel, zelfde
@@ -117,19 +130,68 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   getest** - dat zou een echte voorraadwijziging op de live listings
   betekenen. Zie "Getest" en de beslissing hieronder voor waarom dat een
   bewuste, aparte stap blijft i.p.v. hier al uitgevoerd.
-- [ ] **Fase E:** nieuwe-order-webhooks (Faire + Orderchamp) → automatische
-  import + voorraadaftrek. Hergebruikt `WholesaleOrderImporter`.
-- [ ] **Fase F:** annuleringen → status omzetten + voorraad corrigeren.
+- [x] **Fase E (+ F samengevoegd):** live nieuwe-order-detectie +
+  voorraadaftrek, én annulering + voorraad-terugboeking - zie de beslissing
+  hieronder over waarom die twee niet los te bouwen waren.
+  - **Faire heeft GEEN webhook-API** - geverifieerd door de volledige
+    OpenAPI-spec te doorzoeken (geen enkel webhook/notification-pad, alleen
+    de 26 REST-endpoints uit "Belangrijkste bestanden" hierboven). In plaats
+    daarvan: `backend/wholesale/cron-faire.php`, een publiek, secret-gated
+    endpoint (`?secret=` tegen `WHOLESALE_CRON_SECRET`, `hash_equals()`) dat
+    periodiek (via de hosting-cron, geen SSH/CLI-cron nodig) `fetchOrdersPage()`
+    aanroept met `created_at_min` = het hoogwatermerk uit
+    `wholesale_platforms.last_synced_at` (vastgelegd bij de START van de run).
+    Eerste run zonder hoogwatermerk kijkt 1 dag terug.
+  - **Orderchamp** krijgt wel een echte webhook:
+    `backend/wholesale/webhook-orderchamp.php`, geverifieerd via
+    `X-Orderchamp-Signature` (HMAC-SHA256 met `ORDERCHAMP_WEBHOOK_SECRET`).
+    De payload is bewust minimaal (`{"data":{"order":{"id",...}}}`), dus het
+    endpoint haalt de volledige order opnieuw op via de nieuwe
+    `OrderchampService::fetchOrderById()` i.p.v. op de payload-inhoud te
+    vertrouwen.
+  - **`WholesaleStockDeductionService`** (nieuw) schrijft voorraad AF zodra
+    een order voor het eerst gezien wordt met een niet-geannuleerde status,
+    en BOEKT TERUG zodra een eerder afgeschreven order alsnog geannuleerd
+    wordt - idempotent via de nieuwe `wholesale_orders.stock_deducted_at`
+    (NULL = nog niet afgeschreven). Gebruikt de nieuwe atomische
+    `ProductRepository`/`CardRepository::adjustCurrentStock()` (`current_stock
+    = current_stock + ?`, i.p.v. lees-dan-schrijf) zodat een webhook en een
+    cron-run elkaar niet kunnen overschrijven. Logt elke aanpassing naar
+    `stock_sync_log` met `direction='inbound'` (de omgekeerde richting van
+    fase D's `outbound`).
+  - `WholesaleOrderImporter::importFairePage()/importOrderchampPage()`
+    kregen een `$deductStock`-parameter (default `false`) - de historische
+    import (fase B, `import.php`) geeft dit bewust nooit mee, want die orders
+    zijn al lang fysiek verwerkt. Nieuw: `importOrderchampOrderById()` voor
+    het webhook-pad.
+  - **Nog NIET gedaan (bewust, zie Beslissingen):** de Orderchamp-webhook
+    daadwerkelijk registreren bij Orderchamp (`webhookCreate`-mutatie) - dat
+    is een wijziging bij een externe partij. Zolang dat niet gebeurt, komt er
+    ook geen enkele live aanroep op `webhook-orderchamp.php` binnen en blijft
+    de Faire-cron ongebruikt totdat de hosting-cron ook echt ingesteld wordt.
 - [ ] **Fase G:** live zetten per platform zodra alle producten er correct op
   staan (harde voorwaarde van de gebruiker, zie CLAUDE.md-conventie hierover
   niet apart vastgelegd maar wel leidend voor de bouwvolgorde).
 - [x] Orderchamp: `ORDERCHAMP_ACCESS_TOKEN` staat in .env en
   `OrderchampService::fetchOrdersPage()` is live geverifieerd (86 echte
-  orders correct geïmporteerd). Er is nog geen webhook-signing secret
-  opgehaald - volgt bij het registreren van de webhook in fase E. Er ligt
-  overigens al een oude, vermoedelijk dode webhook ("aniet_orders" →
-  `aniet.nl/beta-5/orderchamp/order...`) uit een eerdere, gestopte koppeling
-  in het Orderchamp-dashboard - die laten we met rust tot fase E.
+  orders correct geïmporteerd).
+- [ ] Orderchamp-order-webhook echt registreren (`webhookCreate`-mutatie,
+  events `[ORDER_CONFIRMED, ORDER_UPDATED, ORDER_CANCELLED]` - niet
+  `ORDER_CREATED`, zie Orderchamps eigen advies om alleen bevestigde orders
+  te verwerken) en het bijbehorende `ORDERCHAMP_WEBHOOK_SECRET` vaststellen.
+  Twee dingen zijn daarbij nog onbevestigd: (1) Orderchamps eigen docs zeggen
+  "Contact us at support@orderchamp.com so we can create an API token for
+  you" voor order-webhooks - onduidelijk of ons bestaande
+  ORDERCHAMP_ACCESS_TOKEN (private-app-token) hiervoor al volstaat; (2) de
+  signing-secret voor een private-app (geen apart OAuth-`client_secret`) is
+  niet expliciet gedocumenteerd. Bewust aan de gebruiker gelaten (wijziging
+  bij een externe partij), zie Beslissingen. Er ligt overigens al een oude,
+  vermoedelijk dode webhook ("aniet_orders" → `aniet.nl/beta-5/orderchamp/
+  order...`) uit een eerdere, gestopte koppeling in het Orderchamp-
+  dashboard - die laten we met rust, los van dit punt.
+- [ ] Hosting-cron daadwerkelijk instellen voor `backend/wholesale/
+  cron-faire.php?secret=...` (bv. elke 15 minuten) - de code is klaar en
+  getest, maar er draait nog geen cron-taak.
 - [x] Faire: orders-API (`GET /orders`) en retailer-profiel (`GET /retailers/
   public/{id}`) zijn alsnog geverifieerd — de OpenAPI-spec bleek uitleesbaar
   via developers.faire.com (zelfde `apidescriptiondocument`-DOM-attribuut-
@@ -142,12 +204,67 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
 - [ ] Geocoding van shopadressen (OpenStreetMap Nominatim) → `shops.lat/lng`.
   Let op: Faire levert ISO alpha-3 landcodes, Orderchamp alpha-2 - bewust
   ongenormaliseerd opgeslagen in `shops.country_code` (VARCHAR(3)).
-- [ ] Periodieke reconciliatie-job (vangnet tegen gemiste webhooks) — hosting
-  heeft hiervoor een cron-optie bevestigd.
+- [x] ~~Periodieke reconciliatie-job (vangnet tegen gemiste webhooks)~~ —
+  ingehaald door fase E: voor Faire is de cron-poller (`cron-faire.php`) de
+  hoofdroute (geen webhook-alternatief), dus niet langer alleen een vangnet.
+  Voor Orderchamp kan dezelfde poller later als vangnet tegen gemiste
+  webhooks hergebruikt worden door `importOrderchampPage(..., true)` er ook
+  in op te nemen - nu nog niet gedaan (Orderchamp-kant leunt voorlopig
+  volledig op de webhook).
 - [ ] Deel 2 (B2B-webshop, zie "Doel" hierboven) — nog niet gestart, wacht op
   een go-beslissing en een niet-verwarrende naam naast deze sectie.
 
 ## Getest
+**Fase E (2026-08-12):** eerst uitgezocht of Faire een webhook-API heeft
+(nee - de volledige OpenAPI-spec doorzocht, geen "webhook" te vinden, alleen
+de bekende 26 REST-paden) en hoe Orderchamp's order-webhook precies werkt
+(developers.orderchamp.com/manage-orders-fulfilment: minimale payload,
+headers `X-Orderchamp-Event`/`X-Orderchamp-Signature`, en het advies om
+alleen `ORDER_CONFIRMED`/`ORDER_UPDATED`/`ORDER_CANCELLED` te gebruiken, niet
+`ORDER_CREATED`, omdat onbevestigde orders nog kunnen wijzigen).
+
+Daarna, whitebox tegen een nieuwe wegwerp-database (zelfde stub-aanpak als
+fase D): via PHP Reflection rechtstreeks `WholesaleOrderImporter::
+normalizeFaireOrder()/normalizeOrderchampOrder()/persist()` aangeroepen met
+synthetische order-payloads in exact de vorm die de al eerder live-
+geverifieerde `fetchOrdersPage()`/`fetchOrderById()` teruggeven - dus zonder
+de echte Faire/Orderchamp-API aan te roepen (die orders bestaan niet echt).
+Dit toetst de nieuwe fase-E-logica op basis van al bewezen normalisatie:
+- Nieuwe Faire-order (3x een testproduct, `deductStock=true`): voorraad
+  correct afgeschreven (20 → 17), `stock_deducted_at` gezet,
+  `stock_sync_log`-regel met `direction=inbound, trigger_type=order_placed`.
+- Dezelfde order nogmaals persisten (dubbele cron-run/webhook-retry):
+  voorraad bleef exact 17 - geen dubbele afschrijving.
+- Order alsnog geannuleerd (`state=CANCELED`): voorraad terug naar 20,
+  `stock_deducted_at` terug naar NULL, logregel met `trigger_type=
+  order_canceled`.
+- Herhaalde annulering: voorraad bleef 20 - geen dubbele terugboeking.
+- Nieuwe Orderchamp-order met een kaart-SKU (2x): voorraad correct
+  afgeschreven (30 → 28) - bevestigt dat de kaart-tak (naast producten)
+  ook werkt.
+- Order met een onbekende SKU: geen crash, correct als "niet gematcht"
+  gerapporteerd, geen (onterechte) voorraadaanpassing of logregel voor die
+  regel.
+- Dezelfde nieuwe Faire-order via `deductStock=false` (het historische-
+  import-pad): voorraad bleef ongewijzigd - bevestigt dat fase B's import.php
+  ook na deze wijziging nooit voorraad aanpast.
+
+Daarna de twee nieuwe publieke endpoints via een draaiende `php -S` (met de
+echte `.env` tijdelijk vervangen en na afloop byte-voor-byte teruggezet):
+- `cron-faire.php`: geen/verkeerd secret → 403; correct secret maar Faire niet
+  geconfigureerd → nette 500 met duidelijke foutmelding (geen crash).
+- `webhook-orderchamp.php`: GET → 405; POST zonder signature → 401; POST met
+  een écht berekende HMAC-SHA256-signature (`openssl dgst -sha256 -hmac`)
+  tegen een testsecret → signature-check slaagt en de aanroep komt door tot
+  de Orderchamp-credential-check (nette 500, want geen token in de
+  testomgeving) - bevestigt dat de hele keten (signature → JSON parsen →
+  order-id → `importOrderchampOrderById()`) intact is; POST met een foute
+  signature → 401.
+
+**Bewust niet getest:** een echte, live Orderchamp-webhookaanroep (die
+bestaat nog niet - zie openstaande punten) en een echte cron-aanroep op de
+hosting zelf (die moet daar nog ingesteld worden).
+
 **Fase D (2026-08-12):** eerst de exacte requestvorm van beide schrijf-
 endpoints opgezocht tegen de echte, publieke bronnen (niet uit losse
 blogposts/derde partijen, die bleken deels af te wijken - zie de beslissing
@@ -374,6 +491,77 @@ runs ongewijzigd (expliciet gecontroleerd). Ook getest: een niet-admin krijgt
   ingebedde spec zelf, net als bij de eerder gedocumenteerde SKU-query-
   parameter-eigenaardigheid.
   **Datum:** 2026-08-12
+
+- **Beslissing:** fase E en fase F (annuleringen) zijn samengevoegd i.p.v.
+  apart gebouwd.
+  **Waarom:** voorraad afschrijven bij een nieuwe order kan niet los van
+  voorraad terugboeken bij een annulering - zonder de terugboek-kant zou een
+  geannuleerde order de voorraad permanent te laag laten staan. Beide horen
+  bij dezelfde `WholesaleStockDeductionService::reconcile()`-beslisboom
+  (nieuw/nog niet afgeschreven → afschrijven; geannuleerd/al afgeschreven →
+  terugboeken), dus apart bouwen zou kunstmatig zijn geweest.
+  **Datum:** 2026-08-13
+- **Beslissing:** voorraad wordt afgeschreven zodra een order voor het eerst
+  gezien wordt met een niet-geannuleerde status (dus ook bij "open"/nog
+  onbevestigd), niet pas zodra deze bevestigd is.
+  **Waarom:** dit is het "gereserveerd/committed"-model (vergelijkbaar met
+  Faire's eigen `committed_quantity` naast `on_hand_quantity`/
+  `available_quantity`, gezien tijdens fase D) - bedoeld om overselling op
+  een ANDER kanaal te voorkomen zolang deze order nog loopt. Bekende
+  afruil: een order die voor altijd in "open" blijft hangen zonder ooit
+  bevestigd óf geannuleerd te worden, houdt de voorraad voorgoed te laag -
+  in de praktijk zeldzaam, en zichtbaar te herstellen via de bestaande
+  fase D/C-cyclus (opnieuw voorraad vergelijken/synchroniseren) als het toch
+  gebeurt.
+  **Datum:** 2026-08-13
+- **Beslissing:** Faire's nieuwe-orders-detectie loopt via een secret-gated
+  cron-URL (`cron-faire.php?secret=...`), niet via `Auth::requireSection()`.
+  **Waarom:** dit endpoint wordt aangeroepen door de hosting-cron, niet door
+  een ingelogde gebruiker - een sessie/login-eis zou een cron-aanroep
+  onmogelijk maken. Hetzelfde patroon (publiek endpoint, eigen verificatie
+  i.p.v. sessie) als het bestaande `specials/webhook.php` voor Mollie.
+  **Datum:** 2026-08-13
+- **Beslissing:** de Orderchamp-webhook haalt bij binnenkomst altijd de
+  volledige order opnieuw op via `OrderchampService::fetchOrderById()`,
+  i.p.v. te vertrouwen op de payload-inhoud.
+  **Waarom:** Orderchamps eigen documentatie zegt expliciet dat de
+  webhook-payload minimaal is (alleen id/number/createdAt/updatedAt) en dat
+  je de actuele order via de API moet ophalen - een aanname over een rijkere
+  payload zou hier dus sowieso fout zijn geweest.
+  **Datum:** 2026-08-13
+- **Beslissing:** de Orderchamp-webhook daadwerkelijk registreren
+  (`webhookCreate`) en het bijbehorende secret vaststellen, is bewust NIET in
+  deze sessie gedaan.
+  **Waarom:** dat is een wijziging bij een externe partij (een nieuwe
+  standing-integratie die begint met live orderdata naar onze server te
+  sturen), en de exacte signing-secret voor ons type token (private-app,
+  geen OAuth-`client_secret`) staat niet expliciet in de documentatie -
+  eerst navragen/uitproberen hoort een bewuste, aparte stap te zijn, niet iets
+  wat impliciet meelift in het bouwen van de ontvanger. De ontvanger zelf is
+  wel al klaar en getest (zie "Getest") zodra dat moment aanbreekt.
+  **Datum:** 2026-08-13
+- **Bevinding (geen bug, wel belangrijk):** Faire's External API heeft geen
+  webhook/notification-mechanisme.
+  **Waarom:** geverifieerd door de volledige, actuele OpenAPI-spec te
+  doorzoeken (dezelfde `apidescriptiondocument`-attribuut-truc als bij de
+  andere Faire-endpoints) - alleen de bekende REST-paden zijn aanwezig, geen
+  enkel pad of schema gerelateerd aan webhooks. Dit was de reden om voor
+  Faire een cron-poller te bouwen i.p.v. een webhook-ontvanger, in
+  tegenstelling tot wat de oorspronkelijke fase-planning ("nieuwe-order-
+  webhooks (Faire + Orderchamp)") veronderstelde.
+  **Datum:** 2026-08-13
+- **Bekende beperking:** als een order NA de eerste afschrijving nog van
+  regels/aantallen verandert (bv. Orderchamp's `ORDER_UPDATED`-event op een
+  nog niet bevestigde order), wordt de voorraadafschrijving niet bijgewerkt -
+  `WholesaleOrderRepository::replaceItems()` vervangt de regels altijd, maar
+  `reconcile()` kijkt alleen naar de status (afgeschreven ja/nee), niet naar
+  wijzigingen in de regels zelf.
+  **Waarom:** volledige item-niveau-diffing (welke regel is toegevoegd/
+  verwijderd/in aantal gewijzigd t.o.v. de vorige afschrijving) is aanzienlijk
+  complexer en niet gevraagd voor deze fase; Orderchamps eigen advies om
+  alleen bevestigde orders te verwerken (zie hierboven) beperkt hoe vaak dit
+  in de praktijk voorkomt.
+  **Datum:** 2026-08-13
 
 ## Zie ook
 [[products]], [[orders]], [[backend]]
