@@ -563,5 +563,23 @@ runs ongewijzigd (expliciet gecontroleerd). Ook getest: een niet-admin krijgt
   in de praktijk voorkomt.
   **Datum:** 2026-08-13
 
+- **Bug gevonden en gefixt na livegang (2026-08-12):** `cron-faire.php` zette
+  het hoogwatermerk met een kale `new DateTimeImmutable()` en plakte daar
+  `Z` achter. Omdat `bootstrap.php` de tijdzone op Europe/Amsterdam zet, was
+  dat in de zomer 2 uur te hoog: elke run vroeg Faire om orders vanaf een
+  tijdstip in de toekomst en schoof het merk daarna wéér 2 uur vooruit.
+  **Waarom dit gevaarlijk was:** de cron bleef netjes `imported: 0` melden -
+  precies wat je ook ziet als er echt niets nieuws is - terwijl hij in
+  werkelijkheid élke nieuwe order zou overslaan. Ontdekt door de opgeslagen
+  `syncedFrom` (19:01Z) te vergelijken met de echte UTC-tijd (17:04Z), niet
+  door een falende test. Nu alles expliciet in UTC, opgeslagen in
+  MySQL-DATETIME-formaat, plus een zelfherstellende clamp: een merk in de
+  toekomst kan alleen fout zijn en valt terug op "een dag geleden", zodat een
+  scheve waarde geen handmatige database-ingreep vraagt.
+  **Les voor de rest van dit project:** `bootstrap.php` zet een niet-UTC
+  standaardtijdzone, dus overal waar een tijdstip naar een externe API gaat
+  (of ermee vergeleken wordt) hoort de tijdzone expliciet gezet te worden.
+  **Datum:** 2026-08-12
+
 ## Zie ook
 [[products]], [[orders]], [[backend]]

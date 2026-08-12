@@ -46,16 +46,30 @@ if ($platform === null) {
     exit;
 }
 
-// Vastleggen VOOR het ophalen begint (hoogwatermerk), zodat orders die
-// tijdens deze run binnenkomen niet worden overgeslagen bij de volgende run.
-$runStartedAt = (new DateTimeImmutable())->format('Y-m-d\TH:i:s\Z');
+// Alles hier expliciet in UTC. bootstrap.php zet de standaardtijdzone op
+// Europe/Amsterdam, dus een kale `new DateTimeImmutable()` levert lokale tijd
+// op; die vervolgens als "...Z" naar Faire sturen maakt het hoogwatermerk in
+// de zomer 2 uur te hoog, waardoor elke volgende run orders zou overslaan.
+$utc = new DateTimeZone('UTC');
+$now = new DateTimeImmutable('now', $utc);
 
-// Eerste run zonder eerdere last_synced_at: een dag terugkijken i.p.v. de
-// volledige historie (die is al binnen via de fase B-import) - voorkomt een
-// onnodig zware eerste cron-run.
-$createdAtMin = $platform['last_synced_at'] !== null
-    ? (new DateTimeImmutable($platform['last_synced_at']))->format('Y-m-d\TH:i:s\Z')
-    : (new DateTimeImmutable('-1 day'))->format('Y-m-d\TH:i:s\Z');
+// Vastleggen VOOR het ophalen begint, zodat orders die tijdens deze run
+// binnenkomen niet worden overgeslagen bij de volgende run.
+$runStartedAt = $now;
+
+$stored = $platform['last_synced_at'] !== null
+    ? new DateTimeImmutable($platform['last_synced_at'], $utc)
+    : null;
+
+// Geen eerder merk: een dag terugkijken i.p.v. de volledige historie (die
+// hoort via de handmatige import binnen te komen) - voorkomt een onnodig
+// zware eerste cron-run. Een merk in de TOEKOMST kan alleen fout zijn (zoals
+// de tijdzonefout hierboven aanrichtte); dan ook liever een dag terugkijken
+// dan stilzwijgend elke order missen, zodat een scheve waarde zichzelf
+// herstelt zonder handmatig ingrijpen in de database.
+$createdAtMin = ($stored === null || $stored > $now)
+    ? $now->sub(new DateInterval('P1D'))
+    : $stored;
 
 $imported = 0;
 $unmatchedSkus = [];
@@ -63,19 +77,26 @@ $cursor = null;
 
 try {
     do {
-        $page = WholesaleOrderImporter::importFairePage($cursor, $createdAtMin, true);
+        $page = WholesaleOrderImporter::importFairePage($cursor, $createdAtMin->format('Y-m-d\TH:i:s\Z'), true);
         $imported += $page['imported'];
         $unmatchedSkus = array_merge($unmatchedSkus, $page['unmatchedSkus']);
         $cursor = $page['nextCursor'];
     } while (!$page['done']);
 
-    WholesalePlatformRepository::updateLastSyncedAt((int) $platform['id'], $runStartedAt);
+    // Opslaan in MySQL-DATETIME-formaat (zonder T/Z) en altijd in UTC - zie de
+    // toelichting bovenaan; het teruglezen hierboven gaat van diezelfde
+    // aanname uit.
+    WholesalePlatformRepository::updateLastSyncedAt(
+        (int) $platform['id'],
+        $runStartedAt->format('Y-m-d H:i:s')
+    );
 
     echo json_encode([
         'status' => 'ok',
         'imported' => $imported,
         'unmatchedSkus' => array_values(array_unique($unmatchedSkus)),
-        'syncedFrom' => $createdAtMin,
+        'syncedFrom' => $createdAtMin->format('Y-m-d\TH:i:s\Z'),
+        'watermarkSetTo' => $runStartedAt->format('Y-m-d\TH:i:s\Z'),
     ]);
 } catch (\RuntimeException $e) {
     error_log('cron-faire.php: ' . $e->getMessage());
