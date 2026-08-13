@@ -14,11 +14,12 @@ namespace App;
  *
  * Nominatim's gebruiksvoorwaarden schrijven twee dingen dwingend voor, en beide
  * zitten hieronder verwerkt:
- *  1. Maximaal 1 verzoek per seconde - vandaar de sleep() tussen twee adressen.
+ *  1. Maximaal 1 verzoek per seconde - centraal afgedwongen in request(), niet
+ *     bij de aanroepers, omdat één adres meerdere pogingen kan kosten.
  *  2. Een herkenbare User-Agent met contactmogelijkheid; een generieke of
  *     ontbrekende User-Agent wordt geblokkeerd.
- * Daarom werkt dit in kleine batches: 104 shops x 1 seconde past niet binnen de
- * max_execution_time van shared hosting.
+ * Daarom werkt dit in kleine batches: 104 shops x minstens een seconde past niet
+ * binnen de max_execution_time van shared hosting.
  */
 final class GeocodingService
 {
@@ -38,7 +39,29 @@ final class GeocodingService
         'CHE' => 'ch', 'DNK' => 'dk', 'SWE' => 'se', 'NOR' => 'no', 'FIN' => 'fi',
         'POL' => 'pl', 'CZE' => 'cz', 'LUX' => 'lu', 'USA' => 'us', 'CAN' => 'ca',
         'AUS' => 'au', 'NZL' => 'nz', 'JPN' => 'jp',
+        // Toegevoegd op 2026-08-13: kwamen echt voor in de orderdata en vielen
+        // daardoor zonder landfilter terug. De lijst hieronder dekt de rest van
+        // de EER plus de grotere Faire-markten, zodat dit niet elk kwartaal
+        // opnieuw hoeft.
+        'EST' => 'ee', 'MLT' => 'mt', 'LVA' => 'lv', 'LTU' => 'lt', 'SVK' => 'sk',
+        'SVN' => 'si', 'HRV' => 'hr', 'HUN' => 'hu', 'ROU' => 'ro', 'BGR' => 'bg',
+        'GRC' => 'gr', 'CYP' => 'cy', 'ISL' => 'is', 'LIE' => 'li', 'MCO' => 'mc',
+        'AND' => 'ad', 'SMR' => 'sm', 'MEX' => 'mx', 'BRA' => 'br', 'ZAF' => 'za',
+        'KOR' => 'kr', 'SGP' => 'sg', 'HKG' => 'hk', 'ARE' => 'ae', 'ISR' => 'il',
+        'TUR' => 'tr', 'UKR' => 'ua', 'SRB' => 'rs',
     ];
+
+    /**
+     * Hoeveel seconden één batch maximaal mag duren. Elk adres kost 1 tot 3
+     * verzoeken (zie lookup()) van elk minimaal een seconde, dus zonder deze
+     * grens zou een batch met veel terugvallen de max_execution_time van shared
+     * hosting overschrijden. De batch stopt gewoon eerder; wat overblijft komt
+     * bij de volgende klik.
+     */
+    private const MAX_SECONDS_PER_BATCH = 20;
+
+    /** Tijdstip van het laatste Nominatim-verzoek, voor de 1/seconde-limiet. */
+    private static ?float $lastRequestAt = null;
 
     /**
      * Werkt maximaal $limit shops zonder coördinaten af. Zet geocoded_at ook bij
@@ -53,14 +76,16 @@ final class GeocodingService
 
         $located = 0;
         $failed = [];
+        $startedAt = time();
+        $processed = 0;
 
-        foreach ($shops as $index => $shop) {
-            // Nominatim staat max. 1 verzoek per seconde toe. Niet wachten vóór
-            // het eerste verzoek - dat zou elke batch een seconde langer maken
-            // zonder dat het iets oplost.
-            if ($index > 0) {
-                sleep(1);
+        foreach ($shops as $shop) {
+            // Tijdgrens: met terugvallen kost één adres tot 3 seconden, dus een
+            // volle batch zou anders de PHP-tijdslimiet kunnen raken.
+            if ($processed > 0 && (time() - $startedAt) >= self::MAX_SECONDS_PER_BATCH) {
+                break;
             }
+            $processed++;
 
             try {
                 $point = self::lookup($shop);
@@ -83,7 +108,7 @@ final class GeocodingService
         }
 
         return [
-            'attempted' => count($shops),
+            'attempted' => $processed,
             'located' => $located,
             'failed' => $failed,
             'remaining' => ShopRepository::countNeedingGeocoding(),
@@ -91,43 +116,88 @@ final class GeocodingService
     }
 
     /**
+     * Probeert een adres in maximaal vier stappen en stopt bij de eerste
+     * treffer. Nodig omdat het `street`-veld in de praktijk vervuild is: de
+     * import plakt Faire's address1+address2 aan elkaar, en address2 bevat vaak
+     * een bedrijfsnaam, unitnummer of verdieping ("24 Tartu maantee ROSES.EE").
+     * Daar struikelt Nominatim's gestructureerde zoekopdracht over, terwijl
+     * postcode en plaats wél betrouwbaar gevuld zijn. Met deze terugval kwamen
+     * alle 20 eerder mislukte adressen alsnog binnen (getest 2026-08-13).
+     *
      * @param array<string, mixed> $shop
      * @return array{lat: float, lng: float}|null null = adres niet gevonden (geen fout)
      */
     private static function lookup(array $shop): ?array
     {
-        $query = [
-            'format' => 'jsonv2',
-            'limit' => '1',
-            // Gestructureerd zoeken i.p.v. één tekstregel: betrouwbaarder bij
-            // buitenlandse adresnotaties dan alles aan elkaar plakken.
-            'street' => trim((string) ($shop['street'] ?? '')),
-            'city' => trim((string) ($shop['city'] ?? '')),
-            'postalcode' => trim((string) ($shop['postal_code'] ?? '')),
-        ];
-
-        $countryCode = self::normalizeCountry((string) ($shop['country_code'] ?? ''));
-        if ($countryCode !== null) {
-            $query['countrycodes'] = $countryCode;
-        }
-
-        $query = array_filter($query, static fn (string $v): bool => $v !== '');
+        $street = trim((string) ($shop['street'] ?? ''));
+        $city = trim((string) ($shop['city'] ?? ''));
+        $postcode = trim((string) ($shop['postal_code'] ?? ''));
+        $country = self::normalizeCountry((string) ($shop['country_code'] ?? ''));
 
         // Zonder plaats én postcode is er te weinig om op te zoeken; dan levert
         // Nominatim hooguit een willekeurig punt in het land op.
-        if (($query['city'] ?? '') === '' && ($query['postalcode'] ?? '') === '') {
+        if ($city === '' && $postcode === '') {
             return null;
         }
 
-        $response = self::request($query);
-        if ($response === [] || !isset($response[0]['lat'], $response[0]['lon'])) {
-            return null;
+        $base = ['format' => 'jsonv2', 'limit' => '1'];
+        if ($country !== null) {
+            $base['countrycodes'] = $country;
         }
 
-        return [
-            'lat' => (float) $response[0]['lat'],
-            'lng' => (float) $response[0]['lon'],
-        ];
+        $attempts = [];
+
+        // 1. Precies: gestructureerd met straat.
+        if ($street !== '') {
+            $attempts[] = $base + array_filter([
+                'street' => $street,
+                'city' => $city,
+                'postalcode' => $postcode,
+            ], static fn (string $v): bool => $v !== '');
+
+            // 2. Vrije tekst: Nominatim negeert ruis in één tekstregel veel beter
+            //    dan in het strikte street-veld.
+            $attempts[] = $base + [
+                'q' => trim(implode(', ', array_filter([$street, trim($postcode . ' ' . $city)]))),
+            ];
+        }
+
+        // 3/4. Zonder straat. Twee varianten, waarvan de volgorde uitmaakt voor
+        //      de JUISTHEID, niet alleen voor de slaagkans: een postcode met
+        //      letters erin (NL/BE/GB) wijst een klein gebied aan en is dan
+        //      betrouwbaarder dan de plaatsnaam. Echt voorbeeld uit de data:
+        //      "Afferden (GLD)" - er zijn twee dorpen Afferden, en zoeken op de
+        //      plaatsnaam levert het verkeerde op (Limburg i.p.v. Gelderland,
+        //      ~40 km ernaast), terwijl de postcode 6654KE het juiste dorp geeft.
+        //      Bij een cijferpostcode (FR/US) is het omgekeerd en voegt de plaats
+        //      juist wél iets toe.
+        $cityForFallback = trim((string) preg_replace('/\s*\([^)]*\)\s*$/', '', $city));
+
+        $byPostcodeOnly = $postcode !== '' ? $base + ['postalcode' => $postcode] : null;
+        $byPostcodeCity = $base + array_filter([
+            'city' => $cityForFallback,
+            'postalcode' => $postcode,
+        ], static fn (string $v): bool => $v !== '');
+
+        $postcodeIsPrecise = $postcode !== '' && preg_match('/[A-Za-z]/', $postcode) === 1;
+
+        foreach ($postcodeIsPrecise ? [$byPostcodeOnly, $byPostcodeCity] : [$byPostcodeCity, $byPostcodeOnly] as $fallback) {
+            if ($fallback !== null) {
+                $attempts[] = $fallback;
+            }
+        }
+
+        foreach ($attempts as $query) {
+            $response = self::request($query);
+            if ($response !== [] && isset($response[0]['lat'], $response[0]['lon'])) {
+                return [
+                    'lat' => (float) $response[0]['lat'],
+                    'lng' => (float) $response[0]['lon'],
+                ];
+            }
+        }
+
+        return null;
     }
 
     private static function normalizeCountry(string $code): ?string
@@ -149,6 +219,17 @@ final class GeocodingService
      */
     private static function request(array $query): array
     {
+        // Nominatim's limiet van 1 verzoek/seconde hier centraal afdwingen, niet
+        // bij de aanroepers: één adres kan meerdere pogingen kosten, dus tellen
+        // per shop volstaat niet. Zo kan geen enkel pad de limiet omzeilen.
+        if (self::$lastRequestAt !== null) {
+            $elapsed = microtime(true) - self::$lastRequestAt;
+            if ($elapsed < 1.0) {
+                usleep((int) ((1.0 - $elapsed) * 1_000_000));
+            }
+        }
+        self::$lastRequestAt = microtime(true);
+
         $curl = curl_init(self::ENDPOINT . '?' . http_build_query($query));
         curl_setopt_array($curl, [
             CURLOPT_RETURNTRANSFER => true,

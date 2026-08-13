@@ -29,6 +29,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'geoco
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'retry_failed') {
+    if (!Auth::isAdmin()) {
+        http_response_code(403);
+        echo '403 - Alleen beheerders kunnen dit doen.';
+        exit;
+    }
+
+    if (!Csrf::verify((string) ($_POST['csrf_token'] ?? ''))) {
+        $geocodeErrors[] = 'Je sessie is verlopen. Probeer het opnieuw.';
+    } else {
+        $requeued = ShopRepository::resetFailedGeocoding();
+        header('Location: shops.php?requeued=' . $requeued);
+        exit;
+    }
+}
+
 $shops = ShopRepository::findAllWithOrderStats();
 $shopsWithCoordinates = array_values(array_filter(
     $shops,
@@ -68,6 +84,13 @@ require __DIR__ . '/../partials/layout-start.php';
             worden ingeladen, verschijnen de bijbehorende shops hier automatisch op de kaart.</p>
     </div>
 <?php else: ?>
+    <?php if (isset($_GET['requeued'])): ?>
+        <div class="alert alert-success">
+            <?= (int) $_GET['requeued'] ?> shop(s) teruggezet in de wachtrij. Klik hieronder
+            op "Haal coördinaten op" om ze opnieuw te proberen.
+        </div>
+    <?php endif; ?>
+
     <?php if (!empty($geocodeErrors)): ?>
         <div class="alert alert-error">
             <ul>
@@ -121,10 +144,15 @@ require __DIR__ . '/../partials/layout-start.php';
                 <?php else: ?>
                     <p class="hint">
                         Voor deze shops is het adres al een keer geprobeerd maar niet
-                        gevonden - meestal een onvolledig of ongebruikelijk adres. Wil
-                        je het opnieuw laten proberen, maak dan <code>geocoded_at</code>
-                        leeg voor die shops.
+                        gevonden - meestal doordat er een bedrijfsnaam of unitnummer in
+                        het straatveld staat. Je kunt ze opnieuw in de wachtrij zetten;
+                        de zoekopdracht valt dan zo nodig terug op postcode + plaats.
                     </p>
+                    <form method="post" action="shops.php">
+                        <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
+                        <input type="hidden" name="action" value="retry_failed">
+                        <button type="submit" class="btn btn-secondary" style="width: auto;">🔁 Probeer mislukte adressen opnieuw</button>
+                    </form>
                 <?php endif; ?>
             <?php endif; ?>
         </div>

@@ -99,6 +99,21 @@ final class ShopRepository
         Database::run('UPDATE shops SET geocoded_at = NOW() WHERE id = ?', 'i', [$id]);
     }
 
+    /**
+     * Zet eerder mislukte adressen terug in de wachtrij (geocoded_at leeg), bv.
+     * nadat de zoekstrategie verbeterd is. Raakt alleen shops zonder
+     * coördinaten, dus geslaagde geocoding gaat hierdoor nooit verloren.
+     */
+    public static function resetFailedGeocoding(): int
+    {
+        return Database::affectedRows(
+            'UPDATE shops SET geocoded_at = NULL
+             WHERE (lat IS NULL OR lng IS NULL) AND geocoded_at IS NOT NULL',
+            '',
+            []
+        );
+    }
+
     public static function countAll(): int
     {
         $row = Database::fetchOne('SELECT COUNT(*) AS total FROM shops');

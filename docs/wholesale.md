@@ -407,6 +407,22 @@ dashboardteller is een link zodra hij boven 0 staat, de SKU-pagina toont de
 juiste groepering, en de geocoding-knop zette de shops daadwerkelijk als
 markers op de kaart. Geen PHP-fouten op de drie gewijzigde pagina's.
 
+**Geocoding-terugval (2026-08-13):** de eerste echte run op de live data haalde
+84 van de 104 shops binnen. De 20 mislukkingen bleken *niet* aan ontbrekende
+gegevens te liggen (straat, postcode én plaats waren overal gevuld), maar aan
+twee dingen: `EST` en `MLT` ontbraken in de landcodetabel, en vooral: het
+`street`-veld is vervuild doordat `WholesaleOrderImporter` Faire's
+address1+address2 aan elkaar plakt - address2 bevat in de praktijk vaak een
+bedrijfsnaam of unitnummer ("24 Tartu maantee ROSES.EE", "Chloe's Closet &
+Friends 120 St J..."), waar Nominatim's strikte `street`-veld op stukloopt.
+Met de terugvalstrategie (vrije tekst, daarna postcode+plaats / postcode-alleen)
+kwamen **alle 20 alsnog binnen**, getest tegen de echte adressen uit de live
+database. Belangrijkste vondst daarbij: bij "Afferden (GLD)" leverde zoeken op
+de opgeschoonde plaatsnaam het VERKEERDE dorp op (Afferden in Limburg, ~40 km
+ernaast) terwijl postcode 6654KE het juiste gaf - vandaar dat een postcode met
+letters erin (NL/BE/GB) vóór de plaatsnaam gaat. Dat is een juistheidskwestie,
+geen slaagkanskwestie: de verkeerde uitkomst zou als "gelukt" zijn doorgegaan.
+
 ## Beslissingen & rationale
 - **Beslissing:** Faire/Orderchamp-marktplaatsorders krijgen een eigen
   tabelset (`wholesale_orders`/`wholesale_order_items`), los van de
