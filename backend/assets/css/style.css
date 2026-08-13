@@ -622,6 +622,36 @@ legend {
     color: var(--color-muted);
 }
 
+/* Aanklikbare variant: gebruikt waar een teller doorverwijst naar de
+   onderliggende lijst (bv. niet-gematchte SKU's op het Wholesale-overzicht). */
+a.stat-tile-link {
+    display: block;
+    text-decoration: none;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+a.stat-tile-link:hover,
+a.stat-tile-link:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+}
+
+a.stat-tile-link:focus-visible {
+    outline: 2px solid var(--color-accent-dark);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    a.stat-tile-link {
+        transition: none;
+    }
+
+    a.stat-tile-link:hover,
+    a.stat-tile-link:focus-visible {
+        transform: none;
+    }
+}
+
 .order-input {
     width: 80px;
     padding: 6px 8px;

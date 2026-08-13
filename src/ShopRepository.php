@@ -52,6 +52,53 @@ final class ShopRepository
         return (int) ($row['total'] ?? 0);
     }
 
+    /**
+     * Shops die nog geocodeerd moeten worden: geen coördinaten én nog niet
+     * eerder tevergeefs geprobeerd (geocoded_at leeg). Zie GeocodingService.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function findNeedingGeocoding(int $limit): array
+    {
+        return Database::fetchAll(
+            'SELECT * FROM shops
+             WHERE (lat IS NULL OR lng IS NULL) AND geocoded_at IS NULL
+             ORDER BY id ASC
+             LIMIT ?',
+            'i',
+            [$limit]
+        );
+    }
+
+    public static function countNeedingGeocoding(): int
+    {
+        $row = Database::fetchOne(
+            'SELECT COUNT(*) AS total FROM shops
+             WHERE (lat IS NULL OR lng IS NULL) AND geocoded_at IS NULL'
+        );
+
+        return (int) ($row['total'] ?? 0);
+    }
+
+    public static function updateCoordinates(int $id, float $lat, float $lng): void
+    {
+        Database::run(
+            'UPDATE shops SET lat = ?, lng = ?, geocoded_at = NOW() WHERE id = ?',
+            'ddi',
+            [$lat, $lng, $id]
+        );
+    }
+
+    /**
+     * Adres niet gevonden: wel geocoded_at zetten (zodat deze shop niet elke run
+     * opnieuw een verzoek kost), maar lat/lng leeg laten. Opnieuw proberen kan
+     * door geocoded_at weer op NULL te zetten.
+     */
+    public static function markGeocodeAttempted(int $id): void
+    {
+        Database::run('UPDATE shops SET geocoded_at = NOW() WHERE id = ?', 'i', [$id]);
+    }
+
     public static function countAll(): int
     {
         $row = Database::fetchOne('SELECT COUNT(*) AS total FROM shops');

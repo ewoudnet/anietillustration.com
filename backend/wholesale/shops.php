@@ -5,9 +5,29 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 
 use App\Auth;
+use App\Csrf;
+use App\GeocodingService;
 use App\ShopRepository;
 
 Auth::requireSection('wholesale');
+
+$csrfToken = Csrf::token();
+$geocodeErrors = [];
+$geocodeResult = null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'geocode') {
+    if (!Auth::isAdmin()) {
+        http_response_code(403);
+        echo '403 - Alleen beheerders kunnen coördinaten ophalen.';
+        exit;
+    }
+
+    if (!Csrf::verify((string) ($_POST['csrf_token'] ?? ''))) {
+        $geocodeErrors[] = 'Je sessie is verlopen. Probeer het opnieuw.';
+    } else {
+        $geocodeResult = GeocodingService::geocodePending(10);
+    }
+}
 
 $shops = ShopRepository::findAllWithOrderStats();
 $shopsWithCoordinates = array_values(array_filter(
@@ -48,11 +68,65 @@ require __DIR__ . '/../partials/layout-start.php';
             worden ingeladen, verschijnen de bijbehorende shops hier automatisch op de kaart.</p>
     </div>
 <?php else: ?>
+    <?php if (!empty($geocodeErrors)): ?>
+        <div class="alert alert-error">
+            <ul>
+                <?php foreach ($geocodeErrors as $error): ?>
+                    <li><?= h($error) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($geocodeResult !== null): ?>
+        <div class="alert alert-success">
+            <?= (int) $geocodeResult['located'] ?> van <?= (int) $geocodeResult['attempted'] ?>
+            shop(s) op de kaart gezet.
+            <?php if ((int) $geocodeResult['remaining'] > 0): ?>
+                Nog <?= (int) $geocodeResult['remaining'] ?> te gaan - klik nogmaals.
+            <?php else: ?>
+                Alle adressen zijn nu afgehandeld.
+            <?php endif; ?>
+        </div>
+        <?php if ($geocodeResult['failed'] !== []): ?>
+            <div class="card" style="margin-bottom: 20px;">
+                <p class="hint">Niet gelukt in deze ronde:</p>
+                <ul class="hint">
+                    <?php foreach ($geocodeResult['failed'] as $failure): ?>
+                        <li><?= h($failure) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
+
     <?php if ($missingCoordinates > 0): ?>
         <div class="card" style="margin-bottom: 20px;">
             <p class="hint"><?= $missingCoordinates ?> van de <?= count($shops) ?> shops
-                hebben nog geen coördinaten (geocoding volgt in een latere bouwfase) en
-                staan daarom niet op de kaart.</p>
+                hebben nog geen coördinaten en staan daarom niet op de kaart.</p>
+            <?php if (Auth::isAdmin()): ?>
+                <?php $pending = ShopRepository::countNeedingGeocoding(); ?>
+                <?php if ($pending > 0): ?>
+                    <p class="hint">
+                        Adressen worden omgezet via OpenStreetMap, dat maximaal één
+                        adres per seconde toestaat. Daarom gaat dit per 10 tegelijk -
+                        nog <?= $pending ?> te gaan, dus ongeveer
+                        <?= (int) ceil($pending / 10) ?> klik(ken).
+                    </p>
+                    <form method="post" action="shops.php">
+                        <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
+                        <input type="hidden" name="action" value="geocode">
+                        <button type="submit" class="btn" style="width: auto;">📍 Haal coördinaten op (10 tegelijk)</button>
+                    </form>
+                <?php else: ?>
+                    <p class="hint">
+                        Voor deze shops is het adres al een keer geprobeerd maar niet
+                        gevonden - meestal een onvolledig of ongebruikelijk adres. Wil
+                        je het opnieuw laten proberen, maak dan <code>geocoded_at</code>
+                        leeg voor die shops.
+                    </p>
+                <?php endif; ?>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 

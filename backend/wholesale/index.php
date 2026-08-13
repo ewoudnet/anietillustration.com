@@ -69,10 +69,18 @@ require __DIR__ . '/../partials/layout-start.php';
         <div class="value"><?= $totalOrders ?></div>
         <div class="label">Wholesale-orders totaal</div>
     </div>
-    <div class="stat-tile">
-        <div class="value"><?= $unmatchedSkus ?></div>
-        <div class="label">Niet-gematchte SKU's in orders</div>
-    </div>
+    <?php if ($unmatchedSkus > 0): ?>
+        <a class="stat-tile stat-tile-link" href="unmatched-skus.php"
+           title="Bekijk welke SKU's niet gekoppeld konden worden">
+            <div class="value"><?= $unmatchedSkus ?></div>
+            <div class="label">Niet-gematchte SKU's in orders &rsaquo;</div>
+        </a>
+    <?php else: ?>
+        <div class="stat-tile">
+            <div class="value"><?= $unmatchedSkus ?></div>
+            <div class="label">Niet-gematchte SKU's in orders</div>
+        </div>
+    <?php endif; ?>
     <div class="stat-tile">
         <div class="value"><?= $shopCount ?></div>
         <div class="label">Shops</div>

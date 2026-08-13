@@ -201,9 +201,24 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   /product-inventory/by-skus`, nu gebouwd als `FaireService::
   updateInventoryBySkus()`, fase D) is schema-geverifieerd maar bewust nog
   niet live getest - zie Beslissingen.
-- [ ] Geocoding van shopadressen (OpenStreetMap Nominatim) → `shops.lat/lng`.
-  Let op: Faire levert ISO alpha-3 landcodes, Orderchamp alpha-2 - bewust
-  ongenormaliseerd opgeslagen in `shops.country_code` (VARCHAR(3)).
+- [x] **Geocoding van shopadressen** (`src/GeocodingService.php` +
+  knop op `shops.php`, alleen admins): zet adressen om naar `shops.lat/lng`
+  via OpenStreetMap Nominatim. Per 10 tegelijk, met `sleep(1)` ertussen -
+  Nominatim staat max. 1 verzoek/seconde toe en 104 shops passen niet binnen
+  de `max_execution_time` van shared hosting. Faire's alpha-3-codes worden
+  hier (en alleen hier) omgezet naar de alpha-2 die Nominatim's
+  `countrycodes`-filter wil; `shops.country_code` blijft bewust
+  ongenormaliseerd. Adres niet gevonden → `geocoded_at` wél gezet, `lat/lng`
+  leeg, zodat het niet elke run opnieuw een verzoek kost (opnieuw proberen =
+  `geocoded_at` leegmaken). Netwerk-/API-fout → `geocoded_at` juist NIET
+  gezet, zodat die shop bij een volgende poging gewoon weer meegaat.
+- [x] **Overzicht van niet-gematchte SKU's** (`backend/wholesale/
+  unmatched-skus.php` + `WholesaleOrderRepository::unmatchedSkuSummary()`):
+  de dashboardteller was alleen een getal zonder doorklikmogelijkheid, zodat
+  een medewerker niet kon zien wélke SKU's ontbraken. De teller is nu een link
+  zodra hij boven 0 staat (`a.stat-tile-link` in style.css). Gegroepeerd per
+  SKU, meest bestelde bovenaan, met platform(en), aantal orderregels,
+  totaal besteld (incl. hoeveel daarvan geannuleerd) en laatste besteldatum.
 - [x] ~~Periodieke reconciliatie-job (vangnet tegen gemiste webhooks)~~ —
   ingehaald door fase E: voor Faire is de cron-poller (`cron-faire.php`) de
   hoofdroute (geen webhook-alternatief), dus niet langer alleen een vangnet.
@@ -373,6 +388,24 @@ correct "niet geplaatst" op beide. Idempotent (herhaald draaien gaf exact
 dezelfde 6 rijen, geen duplicaten) en `cards.current_stock` bleef bij alle
 runs ongewijzigd (expliciet gecontroleerd). Ook getest: een niet-admin krijgt
 403 op de knop en ziet de knop niet eens.
+
+**Geocoding + niet-gematchte SKU's (2026-08-13):** eerst de Nominatim-kant los
+getest met echte adressen in beide notaties die in de orderdata voorkomen -
+alpha-2 (Orderchamp) en alpha-3 (Faire): Dam 1 Amsterdam, 301 Front St W
+Toronto (`CAN`) en 5th Avenue New York (`USA`) kwamen alle drie op de juiste
+coördinaten uit, een adres zonder plaats én postcode wordt overgeslagen zónder
+API-verzoek, en een verzonnen adres levert netjes "niet gevonden" op.
+Daarna tegen een wegwerp-database met een gemengde dataset (gematchte +
+niet-gematchte SKU's over 2 platformen, incl. een geannuleerde order; shops met
+alpha-2, alpha-3, een onbruikbaar adres en één al gecodeerde): de
+groeperingsquery telde `ONBEKEND-X` correct op over 3 regels/2 platformen
+(12 besteld, waarvan 4 geannuleerd), de al gecodeerde shop bleef buiten de
+wachtrij, het onvindbare adres kreeg wel `geocoded_at` maar geen coördinaten,
+en een tweede run deed niets meer (idempotent). Tot slot via de echte UI
+(`php -S`, tijdelijke `.env`, daarna byte-voor-byte teruggezet): de
+dashboardteller is een link zodra hij boven 0 staat, de SKU-pagina toont de
+juiste groepering, en de geocoding-knop zette de shops daadwerkelijk als
+markers op de kaart. Geen PHP-fouten op de drie gewijzigde pagina's.
 
 ## Beslissingen & rationale
 - **Beslissing:** Faire/Orderchamp-marktplaatsorders krijgen een eigen

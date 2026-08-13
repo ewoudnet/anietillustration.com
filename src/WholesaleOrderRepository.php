@@ -84,6 +84,37 @@ final class WholesaleOrderRepository
         Database::run('UPDATE wholesale_orders SET stock_deducted_at = ? WHERE id = ?', 'si', [$datetime, $id]);
     }
 
+    /**
+     * Alle SKU's uit orderregels die niet aan een product/kaart gekoppeld konden
+     * worden, gegroepeerd per SKU - voedt backend/wholesale/unmatched-skus.php.
+     * Zwaarste bovenaan (meest bestelde), want dat zijn de SKU's waar het
+     * ontbreken van een product de meeste voorraadafwijking oplevert.
+     *
+     * De titel is MAX() en dus "een van de gebruikte titels": Faire/Orderchamp
+     * leveren de titel zoals die op het moment van bestellen was, en die kan per
+     * order verschillen voor dezelfde SKU.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function unmatchedSkuSummary(): array
+    {
+        return Database::fetchAll(
+            "SELECT woi.sku,
+                    MAX(woi.title_snapshot) AS title_snapshot,
+                    COUNT(*) AS line_count,
+                    SUM(woi.quantity) AS total_quantity,
+                    SUM(CASE WHEN wo.status = 'canceled' THEN woi.quantity ELSE 0 END) AS canceled_quantity,
+                    MAX(wo.placed_at) AS last_ordered_at,
+                    GROUP_CONCAT(DISTINCT wp.name ORDER BY wp.name SEPARATOR ', ') AS platforms
+             FROM wholesale_order_items woi
+             INNER JOIN wholesale_orders wo ON wo.id = woi.wholesale_order_id
+             INNER JOIN wholesale_platforms wp ON wp.id = wo.platform_id
+             WHERE woi.product_id IS NULL AND woi.card_id IS NULL
+             GROUP BY woi.sku
+             ORDER BY total_quantity DESC, woi.sku ASC"
+        );
+    }
+
     public static function countUnmatchedSkus(): int
     {
         $row = Database::fetchOne(
