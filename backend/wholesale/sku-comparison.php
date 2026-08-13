@@ -60,6 +60,7 @@ foreach (ProductRepository::findAllWithTypeName() as $product) {
     $items[] = [
         'sku' => $product['sku'],
         'title' => $product['title'],
+        'image_path' => $product['image_path'] ?? null,
         'type_name' => $product['product_type_name'],
         'current_stock' => $product['current_stock'],
         'listings' => $listingsByProduct[(int) $product['id']] ?? [],
@@ -69,6 +70,7 @@ foreach (CardRepository::search() as $card) {
     $items[] = [
         'sku' => $card['sku'],
         'title' => $card['title'],
+        'image_path' => $card['image_path'] ?? null,
         'type_name' => 'Kaarten',
         'current_stock' => $card['current_stock'],
         'listings' => $listingsByCard[(int) $card['id']] ?? [],
@@ -168,6 +170,7 @@ require __DIR__ . '/../partials/layout-start.php';
             <table>
                 <thead>
                 <tr>
+                    <th></th>
                     <th>SKU</th>
                     <th>Titel</th>
                     <th>Type</th>
@@ -199,6 +202,11 @@ require __DIR__ . '/../partials/layout-start.php';
                     $shown++;
                     ?>
                     <tr>
+                        <td>
+                            <?php if (!empty($item['image_path'])): ?>
+                                <img class="table-thumb table-thumb-card" src="<?= h(BO_ASSETS_URL) ?>/<?= h($item['image_path']) ?>" alt="">
+                            <?php endif; ?>
+                        </td>
                         <td><?= h($item['sku']) ?></td>
                         <td><?= h($item['title']) ?></td>
                         <td><?= h($item['type_name']) ?></td>
@@ -218,7 +226,7 @@ require __DIR__ . '/../partials/layout-start.php';
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($shown === 0): ?>
-                    <tr><td colspan="<?= 4 + count($platforms) ?>">Geen items met een afwijking gevonden.</td></tr>
+                    <tr><td colspan="<?= 5 + count($platforms) ?>">Geen items met een afwijking gevonden.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

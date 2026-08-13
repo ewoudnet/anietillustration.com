@@ -72,6 +72,7 @@ require __DIR__ . '/../partials/layout-start.php';
             <table>
                 <thead>
                 <tr>
+                    <th></th>
                     <th>SKU</th>
                     <th>Titel</th>
                     <th>Aantal</th>
@@ -82,6 +83,11 @@ require __DIR__ . '/../partials/layout-start.php';
                 <tbody>
                 <?php foreach ($order['items'] as $item): ?>
                     <tr>
+                        <td>
+                            <?php if (!empty($item['image_path'])): ?>
+                                <img class="table-thumb table-thumb-card" src="<?= h(BO_ASSETS_URL) ?>/<?= h($item['image_path']) ?>" alt="">
+                            <?php endif; ?>
+                        </td>
                         <td><?= h($item['sku']) ?></td>
                         <td><?= h($item['title_snapshot']) ?></td>
                         <td><?= (int) $item['quantity'] ?></td>

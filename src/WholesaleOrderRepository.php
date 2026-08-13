@@ -53,8 +53,17 @@ final class WholesaleOrderRepository
             return null;
         }
 
+        // image_path via het gekoppelde product/de gekoppelde kaart, zodat de
+        // orderregels een thumbnail kunnen tonen net als de andere lijsten
+        // (zie backend/aniet-illustration/cards.php). Blijft NULL bij een
+        // niet-gematchte SKU - er is dan immers geen artikel om bij te horen.
         $order['items'] = Database::fetchAll(
-            'SELECT * FROM wholesale_order_items WHERE wholesale_order_id = ? ORDER BY id ASC',
+            'SELECT woi.*, COALESCE(p.image_path, c.image_path) AS image_path
+             FROM wholesale_order_items woi
+             LEFT JOIN products p ON p.id = woi.product_id
+             LEFT JOIN cards c ON c.id = woi.card_id
+             WHERE woi.wholesale_order_id = ?
+             ORDER BY woi.id ASC',
             'i',
             [$id]
         );
