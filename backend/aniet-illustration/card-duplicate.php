@@ -8,6 +8,7 @@ use App\Auth;
 use App\CardRepository;
 use App\Csrf;
 use App\ImageUpload;
+use App\SalesChannelRepository;
 
 Auth::requireSection('aniet-illustration');
 
@@ -51,7 +52,22 @@ $data = [
     'psd_filename' => $original['psd_filename'],
 ];
 
-$newId = CardRepository::create($data, $original['sales_channel_ids']);
+$wholesaleChannelId = null;
+foreach (SalesChannelRepository::findAll() as $channel) {
+    if ($channel['name'] === 'Wholesale') {
+        $wholesaleChannelId = (int) $channel['id'];
+        break;
+    }
+}
+
+// Wholesale wordt niet meegekopieerd: een kopie is meestal het startpunt voor
+// een nieuw (Greetz-)ontwerp en mag niet ongemerkt als wholesale-artikel meelopen.
+$salesChannelIds = array_values(array_filter(
+    $original['sales_channel_ids'],
+    static fn (int $channelId): bool => $channelId !== $wholesaleChannelId
+));
+
+$newId = CardRepository::create($data, $salesChannelIds);
 
 header('Location: card-form.php?id=' . $newId . '&duplicated=1');
 exit;
