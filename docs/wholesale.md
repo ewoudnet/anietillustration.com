@@ -507,6 +507,24 @@ geen slaagkanskwestie: de verkeerde uitkomst zou als "gelukt" zijn doorgegaan.
   betekenen "SKU is bij Faire hernoemd", niet alleen "nooit geplaatst".
   **Datum:** 2026-08-12
 
+- **Beslissing:** `CardRepository::findWholesaleOnly()` toegevoegd en gebruikt
+  in `WholesaleStockChecker`, `WholesaleStockSyncService` en
+  `sku-comparison.php` in plaats van het ongefilterde `CardRepository::search()`.
+  **Waarom:** deze drie plekken keken naar álle kaarten, ook die uitsluitend
+  bij Greetz/Kaartje2Go/Thortful/Redbubble verkocht worden. Zulke kaarten
+  hebben nooit een Faire/Orderchamp-listing en kwamen dus onterecht als "niet
+  geplaatst" naar voren in de SKU-vergelijking, en werden ook meegenomen in de
+  voorraad-terugschrijf-sync (fase D). Alleen kaarten met de "Wholesale"-
+  sales-channel-koppeling zijn hier relevant. Producten (niet-kaarten) zijn
+  ongewijzigd - die zijn per definitie uitsluitend Wholesale (zie
+  `ProductRepository`-docblock), dus daar was al geen kanaal-koppeling nodig.
+  `SkuResolver`/`WholesaleOrderImporter` (matcht binnenkomende order-SKU's) en
+  de "Niet-gematchte SKU's"-lijst blijven bewust ongefilterd: een
+  daadwerkelijk binnengekomen Faire/Orderchamp-order is op zich al bewijs dat
+  die SKU via wholesale verkocht wordt, ook als het Wholesale-vinkje lokaal
+  (nog) niet gezet is.
+  **Datum:** 2026-08-17
+
 - **Beslissing:** `stock_sync_log` kreeg een losse `dry_run`-kolom
   (migratie 007) i.p.v. proefdraaien te herkennen aan bijv. een speciale
   `trigger_type` of misbruik van `error_message`.

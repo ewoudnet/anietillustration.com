@@ -66,7 +66,7 @@ foreach (ProductRepository::findAllWithTypeName() as $product) {
         'listings' => $listingsByProduct[(int) $product['id']] ?? [],
     ];
 }
-foreach (CardRepository::search() as $card) {
+foreach (CardRepository::findWholesaleOnly() as $card) {
     $items[] = [
         'sku' => $card['sku'],
         'title' => $card['title'],

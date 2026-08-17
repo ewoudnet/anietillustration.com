@@ -91,6 +91,27 @@ final class CardRepository
     }
 
     /**
+     * Alleen kaarten die daadwerkelijk als Wholesale verkocht worden (gekoppeld aan de
+     * "Wholesale"-sales-channel) - gebruikt door de Faire/Orderchamp-voorraadsync en de
+     * SKU-vergelijking, zodat kaarten die uitsluitend bij Greetz/Kaartje2Go/Thortful/
+     * Redbubble verkocht worden niet als "niet geplaatst" verschijnen.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function findWholesaleOnly(): array
+    {
+        return Database::fetchAll(
+            "SELECT c.* FROM cards c
+             WHERE c.id IN (
+                 SELECT csc.card_id FROM card_sales_channels csc
+                 INNER JOIN sales_channels sc ON sc.id = csc.sales_channel_id
+                 WHERE sc.name = 'Wholesale'
+             )
+             ORDER BY c.sku DESC"
+        );
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     public static function find(int $id): ?array

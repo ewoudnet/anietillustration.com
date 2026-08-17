@@ -72,7 +72,7 @@ final class WholesaleStockChecker
                 $items[] = ['type' => 'product', 'id' => (int) $product['id'], 'sku' => $product['sku']];
             }
         }
-        foreach (CardRepository::search() as $card) {
+        foreach (CardRepository::findWholesaleOnly() as $card) {
             if ($card['sku'] !== '') {
                 $items[] = ['type' => 'card', 'id' => (int) $card['id'], 'sku' => $card['sku']];
             }

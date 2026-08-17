@@ -98,7 +98,7 @@ final class WholesaleStockSyncService
                 $listingsByProduct[(int) $product['id']][$platformCode] ?? null
             );
         }
-        foreach (CardRepository::search() as $card) {
+        foreach (CardRepository::findWholesaleOnly() as $card) {
             self::collect(
                 $items,
                 'card',
