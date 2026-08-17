@@ -159,10 +159,15 @@ require __DIR__ . '/../partials/layout-start.php';
             <?= $hasFilters ? 'Gevonden' : 'Totaal' ?>: <strong><?= (int) $totalCards ?></strong>
             <?= $totalCards === 1 ? 'kaart' : 'kaarten' ?>
         </p>
+        <div class="admin-topbar" style="margin-bottom: 12px;">
+            <span id="label-select-count" class="hint">Geen kaarten geselecteerd</span>
+            <button type="button" id="label-select-submit" class="btn" style="width: auto; margin-top: 0;" disabled>🏷️ Print labels van selectie</button>
+        </div>
         <div class="table-wrapper">
             <table class="orders">
                 <thead>
                 <tr>
+                    <th style="width: 32px;"><input type="checkbox" id="label-select-all" title="Alles op deze pagina selecteren"></th>
                     <th style="width: 76px;"></th>
                     <th style="width: 110px;">SKU</th>
                     <th>Titel</th>
@@ -176,6 +181,7 @@ require __DIR__ . '/../partials/layout-start.php';
                 <tbody>
                 <?php foreach ($cards as $cardRow): ?>
                     <tr>
+                        <td><input type="checkbox" value="<?= (int) $cardRow['id'] ?>" class="label-select-checkbox"></td>
                         <td>
                             <?php if (!empty($cardRow['image_path'])): ?>
                                 <img class="table-thumb table-thumb-card" src="<?= h(BO_ASSETS_URL) ?>/<?= h($cardRow['image_path']) ?>" alt="">
@@ -236,4 +242,46 @@ require __DIR__ . '/../partials/layout-start.php';
         ], 'cards.php') ?>
     <?php endif; ?>
 </div>
+<script>
+(function () {
+    var selectAll = document.getElementById('label-select-all');
+    var checkboxes = document.querySelectorAll('.label-select-checkbox');
+    var countLabel = document.getElementById('label-select-count');
+    var submitBtn = document.getElementById('label-select-submit');
+    if (!submitBtn) {
+        return;
+    }
+
+    function update() {
+        var checked = Array.prototype.filter.call(checkboxes, function (cb) { return cb.checked; });
+        countLabel.textContent = checked.length === 0
+            ? 'Geen kaarten geselecteerd'
+            : checked.length + ' kaart' + (checked.length === 1 ? '' : 'en') + ' geselecteerd';
+        submitBtn.disabled = checked.length === 0;
+        if (selectAll) {
+            selectAll.checked = checked.length > 0 && checked.length === checkboxes.length;
+        }
+    }
+
+    checkboxes.forEach(function (cb) { cb.addEventListener('change', update); });
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            checkboxes.forEach(function (cb) { cb.checked = selectAll.checked; });
+            update();
+        });
+    }
+
+    submitBtn.addEventListener('click', function () {
+        var ids = Array.prototype.filter.call(checkboxes, function (cb) { return cb.checked; })
+            .map(function (cb) { return 'ids[]=' + encodeURIComponent(cb.value); });
+        if (ids.length === 0) {
+            return;
+        }
+        window.open('label-print.php?' + ids.join('&'), '_blank');
+    });
+
+    update();
+})();
+</script>
 <?php require __DIR__ . '/../partials/layout-end.php'; ?>

@@ -131,6 +131,27 @@ final class CardRepository
     }
 
     /**
+     * @param array<int, int> $ids
+     * @return array<int, array<string, mixed>>
+     */
+    public static function findByIds(array $ids): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $types = str_repeat('i', count($ids));
+
+        return Database::fetchAll(
+            "SELECT * FROM cards WHERE id IN ({$placeholders}) ORDER BY title ASC",
+            $types,
+            $ids
+        );
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     public static function findBySku(string $sku): ?array
