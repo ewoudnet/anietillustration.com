@@ -9,7 +9,10 @@ use App\CardRepository;
 
 Auth::requireSection('aniet-illustration');
 
-$needsOrdering = CardRepository::needsOrdering();
+$needsOrdering = array_values(array_filter(
+    CardRepository::needsOrdering(),
+    static fn (array $c): bool => (int) $c['to_order'] > 0
+));
 $generatedAt = (new DateTime())->format('d-m-Y H:i');
 $totalToOrder = array_sum(array_map(static fn (array $c): int => (int) $c['to_order'], $needsOrdering));
 ?>
