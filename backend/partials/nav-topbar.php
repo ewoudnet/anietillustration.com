@@ -60,6 +60,7 @@ $sectionEntryPages = [
             <a href="<?= h(BACKEND_BASE) ?>/aniet-illustration/cards.php" class="<?= $activePage === 'cards' ? 'active' : '' ?>">Overzicht</a>
             <a href="<?= h(BACKEND_BASE) ?>/aniet-illustration/card-form.php" class="<?= $activePage === 'card-form' ? 'active' : '' ?>">+ Toevoegen</a>
             <a href="<?= h(BACKEND_BASE) ?>/aniet-illustration/order.php" class="<?= $activePage === 'order' ? 'active' : '' ?>">Bestelpagina</a>
+            <a href="<?= h(BACKEND_BASE) ?>/aniet-illustration/labels.php" class="<?= $activePage === 'labels' ? 'active' : '' ?>">Labels</a>
         <?php elseif (is_int($activeProductType)): ?>
             <a href="<?= h(BACKEND_BASE) ?>/aniet-illustration/products.php?type_id=<?= $activeProductType ?>" class="<?= $activePage === 'products' ? 'active' : '' ?>">Overzicht</a>
             <a href="<?= h(BACKEND_BASE) ?>/aniet-illustration/product-form.php?type_id=<?= $activeProductType ?>" class="<?= $activePage === 'product-form' ? 'active' : '' ?>">+ Toevoegen</a>

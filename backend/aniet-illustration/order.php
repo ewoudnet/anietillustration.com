@@ -31,10 +31,6 @@ $orderQueryParams = $draftOnly === true ? ['draft' => '1'] : [];
 
 $totalToOrder = array_sum(array_map(static fn (array $c): int => (int) $c['to_order'], $needsOrdering));
 $designCount = count($needsOrdering);
-$draftNeedsOrderingCount = count(array_filter(
-    $needsOrdering,
-    static fn (array $c): bool => (int) $c['wholesale_draft'] === 1
-));
 
 $pageTitle = 'Bestelpagina - Kaarten';
 require __DIR__ . '/../partials/layout-start.php';
@@ -58,12 +54,7 @@ require __DIR__ . '/../partials/layout-start.php';
     <div class="card" style="margin-bottom: 20px;">
         <div class="admin-topbar" style="margin-bottom: 12px;">
             <strong>Moet besteld worden</strong>
-            <div style="display: flex; gap: 8px;">
-                <?php if ($draftNeedsOrderingCount > 0): ?>
-                    <a href="label-print.php" target="_blank" class="btn" style="width: auto; margin-top: 0;">🏷️ Print labels nieuwe kaarten (<?= (int) $draftNeedsOrderingCount ?>)</a>
-                <?php endif; ?>
-                <a href="order-print.php" target="_blank" class="btn" style="width: auto; margin-top: 0;">🖨️ Print bestellijst</a>
-            </div>
+            <a href="order-print.php" target="_blank" class="btn" style="width: auto; margin-top: 0;">🖨️ Print bestellijst</a>
         </div>
         <div class="table-wrapper">
             <table class="orders" id="needs-ordering-table">
