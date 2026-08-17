@@ -118,7 +118,9 @@ final class FaireService
         foreach (array_chunk($skuToQuantity, self::SKUS_PER_REQUEST, true) as $chunk) {
             $inventories = [];
             foreach ($chunk as $sku => $qty) {
-                $inventories[] = ['sku' => $sku, 'on_hand_quantity' => $qty];
+                // Zelfde (string) cast als OrderchampService::updateInventoryBySkus(): numerieke
+                // SKU's worden als array-sleutel stilzwijgend naar int gecast door PHP.
+                $inventories[] = ['sku' => (string) $sku, 'on_hand_quantity' => $qty];
             }
 
             $response = self::request('PATCH', '/product-inventory/by-skus', [], ['inventories' => $inventories]);

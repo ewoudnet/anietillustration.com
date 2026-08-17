@@ -318,7 +318,10 @@ final class OrderchampService
         foreach (array_chunk($skuToQuantity, self::INVENTORY_SKUS_PER_REQUEST, true) as $chunk) {
             $inventoryLevels = [];
             foreach ($chunk as $sku => $qty) {
-                $inventoryLevels[] = ['sku' => $sku, 'adjustment' => $qty, 'action' => 'SET'];
+                // Array-sleutels met numerieke SKU's (bv. "251201") worden door PHP stilzwigend
+                // naar int gecast - zonder (string) cast serialiseert json_encode dit als getal,
+                // wat de Orderchamp-GraphQL-schema (sku: String!) afwijst.
+                $inventoryLevels[] = ['sku' => (string) $sku, 'adjustment' => $qty, 'action' => 'SET'];
             }
 
             $response = self::request($query, ['input' => ['inventoryLevels' => $inventoryLevels]]);
