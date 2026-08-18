@@ -105,6 +105,48 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   [[backend]] voor die afwijking t.o.v. de oorspronkelijke docs-beschrijving).
 
 ## Status / openstaande punten
+- [x] **Sync + menu tijdelijk gepauzeerd (2026-08-18, gebruikersverzoek):** na
+  het voorraadcorruptie-incident (zie `e5636b9`) en de daaropvolgende
+  voorraadsimulatie (`0ce2699`) heeft de gebruiker gevraagd om **alle**
+  contact met Faire/Orderchamp stil te leggen totdat er weer vertrouwen is,
+  en het systeem weer terug te schalen naar hoe het was - niet alleen
+  schrijven (dat stond al op dry-run via `sync_enabled=0`), maar ook lezen.
+  Concreet, zonder de gebouwde code te verwijderen:
+  - Nieuwe constante `WHOLESALE_SYNC_PAUSED` (`backend/bootstrap.php`, op
+    `true`) - de centrale noodstop.
+  - `backend/wholesale/cron-faire.php` en `webhook-orderchamp.php` geven nu
+    meteen een `503` terug (na de bestaande secret-/signature-check) zonder
+    Faire/Orderchamp aan te roepen.
+  - `backend/wholesale/import.php` (historische import) en
+    `sku-comparison.php` (beide knoppen: voorraad controleren én
+    synchroniseren) tonen nu een melding i.p.v. de aanroep te doen.
+  - `product-form.php`/`card-form.php`: de checkbox "Voorraad direct
+    synchroniseren naar Faire/Orderchamp na opslaan" is verborgen
+    (`!WHOLESALE_SYNC_PAUSED`) en de opslaan-aanroep zelf ook geguard, voor
+    het geval een oud formulier de veldnaam nog verstuurt.
+  - **Bewust NIET geguard:** `backend/wholesale/simulatie.php`
+    (`WholesaleStockSimulationService`) - leest wel live bij Faire/Orderchamp,
+    maar schrijft per ontwerp nooit iets terug (zie fase-omschrijving
+    hierboven); blijft dus bruikbaar als iemand er handmatig naartoe
+    navigeert. Wordt sowieso niet meer per ongeluk geopend nu de menuknop weg
+    is (volgende punt).
+  - De sectieknop "Wholesale" in de backend-topbar
+    (`backend/partials/nav-topbar.php`) is verwijderd uit
+    `$sectionEntryPages` - de sectie/pagina's zelf, en de subnav die
+    verschijnt zodra je er direct naartoe navigeert, blijven intact.
+  - De "Huidige voorraad"-kolom op de bestaande bestelpagina's
+    (`aniet-illustration/order.php` + `product-order.php`, dus **niet**
+    wholesale-specifiek, maar wel de kolom die de gebruiker "de stock level
+    kolom in de bestellijst" noemde) is verwijderd, inclusief de
+    bijbehorende dynamische-rij-code in `assets/js/order-autosave.js`. "Min.
+    voorraad" en "Te bestellen" blijven staan.
+  - `backend/settings/faire-sync.php` (de oude, losstaande eenrichtingstool)
+    stond al uitgezet sinds het corruptie-incident, ongewijzigd gelaten.
+  - **Terugzetten:** zet `WHOLESALE_SYNC_PAUSED` op `false` in
+    `backend/bootstrap.php` - dat zet de cron/webhook/import/sku-comparison/
+    formulier-checkbox-guards in één keer weer aan. De menuknop en de
+    voorraadkolom moeten er apart weer bij (ze zijn bewust niet aan deze
+    constante gekoppeld, want dat zijn UI-keuzes, geen sync-aanroepen).
 - [x] **Fase A (skelet):** datamodel, backend-sectie + navigatie, alle
   pagina's draaien tegen de echte (nog lege) tabellen.
 - [x] **Fase B (historische import):** `backend/wholesale/import.php` haalt

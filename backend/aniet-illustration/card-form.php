@@ -203,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $syncQuery = '';
-        if (isset($_POST['sync_now']) && Auth::isAdmin()) {
+        if (isset($_POST['sync_now']) && Auth::isAdmin() && !WHOLESALE_SYNC_PAUSED) {
             WholesaleStockSyncService::run();
             $syncQuery = '&synced=1';
         }
@@ -361,7 +361,7 @@ require __DIR__ . '/../partials/layout-start.php';
                     <small class="hint">Kan ook direct op de bestelpagina aangepast worden.</small>
                 </div>
             </div>
-            <?php if (Auth::isAdmin()): ?>
+            <?php if (Auth::isAdmin() && !WHOLESALE_SYNC_PAUSED): ?>
                 <div class="field field-checkbox" style="margin-top: 10px;">
                     <label>
                         <input type="checkbox" id="sync_now" name="sync_now" value="1">

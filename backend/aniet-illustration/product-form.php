@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $syncQuery = '';
-            if (isset($_POST['sync_now']) && Auth::isAdmin()) {
+            if (isset($_POST['sync_now']) && Auth::isAdmin() && !WHOLESALE_SYNC_PAUSED) {
                 WholesaleStockSyncService::run();
                 $syncQuery = '&synced=1';
             }
@@ -221,7 +221,7 @@ require __DIR__ . '/../partials/layout-start.php';
                 </label>
                 <small class="hint">Draft-producten met 0 of lage voorraad verschijnen niet automatisch in de bestellijst; alleen via het aparte draft-filter of een expliciete "te bestellen".</small>
             </div>
-            <?php if (Auth::isAdmin()): ?>
+            <?php if (Auth::isAdmin() && !WHOLESALE_SYNC_PAUSED): ?>
                 <div class="field field-checkbox" style="margin-top: 10px;">
                     <label>
                         <input type="checkbox" id="sync_now" name="sync_now" value="1">

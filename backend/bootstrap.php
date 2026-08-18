@@ -237,3 +237,16 @@ define('SPECIALS_ASSETS_PATH', dirname(__DIR__) . '/specials/assets');
  */
 define('BO_ASSETS_PATH', Config::get('BO_ASSETS_PATH') ?? dirname(__DIR__) . '/backoffice/assets');
 define('BO_ASSETS_URL', Config::get('BO_ASSETS_URL') ?? 'https://aniet.nl/backoffice/assets');
+
+/**
+ * Centrale noodstop (2026-08-18, gebruikersverzoek na het voorraadcorruptie-
+ * incident): geen enkele aanroep naar de Faire/Orderchamp-API meer, in beide
+ * richtingen, totdat de gebruiker hier weer klaar voor is. De losse
+ * endpoints/pagina's die daadwerkelijk contact maken (cron-faire.php,
+ * webhook-orderchamp.php, wholesale/import.php, wholesale/sku-comparison.php,
+ * product-form.php/card-form.php) checken deze constante zelf en tonen een
+ * nette melding i.p.v. de aanroep te doen. De onderliggende services/code
+ * blijven ongewijzigd staan (zie docs/wholesale.md) voor als dit weer wordt
+ * aangezet.
+ */
+define('WHOLESALE_SYNC_PAUSED', true);

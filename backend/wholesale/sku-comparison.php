@@ -30,6 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
 
     if (!Csrf::verify((string) ($_POST['csrf_token'] ?? ''))) {
         $checkErrors[] = 'Je sessie is verlopen. Probeer het opnieuw.';
+    } elseif (WHOLESALE_SYNC_PAUSED) {
+        $checkErrors[] = 'Wholesale-sync staat tijdelijk uit (zie backend/bootstrap.php) - voorraad controleren is uitgeschakeld.';
     } else {
         $checkResult = WholesaleStockChecker::run();
     }
@@ -44,6 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'sync_
 
     if (!Csrf::verify((string) ($_POST['csrf_token'] ?? ''))) {
         $syncErrors[] = 'Je sessie is verlopen. Probeer het opnieuw.';
+    } elseif (WHOLESALE_SYNC_PAUSED) {
+        $syncErrors[] = 'Wholesale-sync staat tijdelijk uit (zie backend/bootstrap.php) - synchroniseren is uitgeschakeld.';
     } else {
         $syncResult = WholesaleStockSyncService::run();
     }

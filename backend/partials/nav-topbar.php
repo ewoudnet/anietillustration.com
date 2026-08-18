@@ -20,10 +20,13 @@ $activeProductType ??= null; // 'cards' | int (products.product_type_id) | null
 $sections = SectionRepository::findAll();
 
 // Entry-page per sectieslug - moet in sync blijven met backend/index.php.
+// 'wholesale' is hier bewust weggelaten (2026-08-18, gebruikersverzoek): de
+// sectie zelf en de code blijven intact (zie docs/wholesale.md +
+// WHOLESALE_SYNC_PAUSED in bootstrap.php), alleen de menuknop is tijdelijk
+// weg. Rechtstreeks naar een wholesale/-pagina navigeren werkt nog gewoon.
 $sectionEntryPages = [
     'aniet-illustration' => 'cards.php',
     'specials' => 'index.php',
-    'wholesale' => 'index.php',
 ];
 ?>
 <div class="topbar">

@@ -26,6 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!Csrf::verify((string) ($_POST['csrf_token'] ?? ''))) {
         $errors[] = 'Je sessie is verlopen. Probeer het opnieuw.';
+    } elseif (WHOLESALE_SYNC_PAUSED) {
+        $errors[] = 'Wholesale-sync staat tijdelijk uit (zie backend/bootstrap.php) - importeren is uitgeschakeld.';
     } else {
         $resultPlatform = (string) ($_POST['platform'] ?? '');
         $cursor = trim((string) ($_POST['cursor'] ?? '')) ?: null;

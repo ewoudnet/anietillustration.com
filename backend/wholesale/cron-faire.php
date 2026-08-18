@@ -34,6 +34,12 @@ if ($secret === '' || !hash_equals($secret, $provided)) {
     exit;
 }
 
+if (WHOLESALE_SYNC_PAUSED) {
+    http_response_code(503);
+    echo json_encode(['error' => 'Wholesale-sync staat tijdelijk uit (zie backend/bootstrap.php).']);
+    exit;
+}
+
 if (!FaireService::isConfigured()) {
     http_response_code(500);
     echo json_encode(['error' => 'Faire-credentials zijn nog niet ingesteld in .env.']);

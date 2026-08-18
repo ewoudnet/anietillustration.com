@@ -64,7 +64,6 @@ require __DIR__ . '/../partials/layout-start.php';
                     <th style="width: 110px;">SKU</th>
                     <th>Titel</th>
                     <th style="width: 110px;">Min. voorraad</th>
-                    <th style="width: 110px;">Huidige voorraad</th>
                     <th style="width: 130px;">Te bestellen</th>
                 </tr>
                 </thead>
@@ -81,7 +80,6 @@ require __DIR__ . '/../partials/layout-start.php';
                         <td class="reference"><?= h($cardRow['sku']) ?></td>
                         <td><a class="title-link" href="card-form.php?id=<?= (int) $cardRow['id'] ?>"><?= h($cardRow['title']) ?></a></td>
                         <td data-min-stock-display><?= (int) $cardRow['min_stock'] ?></td>
-                        <td data-current-stock-display><?= $cardRow['current_stock'] !== null ? (int) $cardRow['current_stock'] : '—' ?></td>
                         <td>
                             <input type="number" min="0" class="order-input" data-card-id="<?= (int) $cardRow['id'] ?>"
                                    value="<?= (int) $cardRow['to_order'] ?>">
@@ -116,7 +114,6 @@ require __DIR__ . '/../partials/layout-start.php';
                     <th style="width: 110px;">SKU</th>
                     <th>Titel</th>
                     <th style="width: 120px;"><?= sortHeader('min_stock', 'Min. voorraad', $sort, $dir, $orderQueryParams, 'order.php') ?></th>
-                    <th style="width: 120px;"><?= sortHeader('current_stock', 'Huidige voorraad', $sort, $dir, $orderQueryParams, 'order.php') ?></th>
                     <th style="width: 130px;"><?= sortHeader('to_order', 'Te bestellen', $sort, $dir, $orderQueryParams, 'order.php') ?></th>
                 </tr>
                 </thead>
@@ -138,7 +135,6 @@ require __DIR__ . '/../partials/layout-start.php';
                             <?php endif; ?>
                         </td>
                         <td><?= (int) $cardRow['min_stock'] ?></td>
-                        <td><?= $cardRow['current_stock'] !== null ? (int) $cardRow['current_stock'] : '—' ?></td>
                         <td>
                             <input type="number" min="0" class="order-input" data-card-id="<?= (int) $cardRow['id'] ?>"
                                    value="<?= (int) $cardRow['to_order'] ?>">

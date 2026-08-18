@@ -57,10 +57,6 @@
         minStockCell.setAttribute('data-min-stock-display', '');
         minStockCell.textContent = String(data.min_stock);
 
-        var currentStockCell = document.createElement('td');
-        currentStockCell.setAttribute('data-current-stock-display', '');
-        currentStockCell.textContent = data.current_stock === null ? '—' : String(data.current_stock);
-
         var toOrderCell = document.createElement('td');
         var input = document.createElement('input');
         input.type = 'number';
@@ -78,7 +74,6 @@
         row.appendChild(skuCell);
         row.appendChild(titleCell);
         row.appendChild(minStockCell);
-        row.appendChild(currentStockCell);
         row.appendChild(toOrderCell);
 
         return row;
@@ -105,11 +100,6 @@
 
             var minStockDisplay = row.querySelector('[data-min-stock-display]');
             if (minStockDisplay) minStockDisplay.textContent = String(data.min_stock);
-
-            var currentStockDisplay = row.querySelector('[data-current-stock-display]');
-            if (currentStockDisplay) {
-                currentStockDisplay.textContent = data.current_stock === null ? '—' : String(data.current_stock);
-            }
         }
 
         recomputeTotals();

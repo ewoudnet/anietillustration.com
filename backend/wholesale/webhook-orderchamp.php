@@ -42,6 +42,12 @@ if ($secret === '' || $signature === '' || !hash_equals(hash_hmac('sha256', $raw
     exit;
 }
 
+if (WHOLESALE_SYNC_PAUSED) {
+    http_response_code(503);
+    echo json_encode(['error' => 'Wholesale-sync staat tijdelijk uit (zie backend/bootstrap.php).']);
+    exit;
+}
+
 $payload = json_decode($rawBody, true);
 $orderId = $payload['data']['order']['id'] ?? null;
 
