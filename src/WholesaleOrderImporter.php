@@ -278,13 +278,6 @@ final class WholesaleOrderImporter
      */
     private static function persist(int $platformId, array $normalized, bool $deductStock = false): array
     {
-        // Vóór de upsert opzoeken - erna is niet meer te zien of dit een
-        // nieuwe order was of een statuswijziging op een bekende order (fase E).
-        $existing = $deductStock
-            ? WholesaleOrderRepository::findByPlatformAndExternalId($platformId, $normalized['external_order_id'])
-            : null;
-        $previousStockDeductedAt = $existing['stock_deducted_at'] ?? null;
-
         $shopId = null;
         if ($normalized['shop'] !== null) {
             $shopId = ShopRepository::upsert([
@@ -331,7 +324,6 @@ final class WholesaleOrderImporter
         if ($deductStock) {
             $stockChanged = WholesaleStockDeductionService::reconcile(
                 $orderId,
-                $previousStockDeductedAt,
                 $normalized['status'],
                 $platformId,
                 $items

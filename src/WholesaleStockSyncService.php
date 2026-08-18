@@ -45,9 +45,19 @@ final class WholesaleStockSyncService
                         throw new \RuntimeException(ucfirst($code) . '-credentials zijn nog niet ingesteld in .env.');
                     }
 
+                    // `current_stock` is al verminderd met toegewezen open orders
+                    // (WholesaleStockDeductionService trekt af zodra een order
+                    // gezien wordt, niet pas bij verzending) - het platform-veld
+                    // dat we hier schrijven (Faire's on_hand_quantity, Orderchamp's
+                    // SET-adjustment) verwacht juist het RUWE fysieke aantal, dus
+                    // het toegewezen bedrag moet er weer bij vóór het versturen.
+                    // Zonder dit trekt het platform diezelfde orders een tweede
+                    // keer af (zie docs/wholesale.md).
+                    $committed = WholesaleOrderRepository::committedQuantityByItem($platformId);
                     $skuToQuantity = [];
                     foreach ($items as $item) {
-                        $skuToQuantity[$item['sku']] = $item['current_stock'];
+                        $key = $item['type'] . ':' . $item['id'];
+                        $skuToQuantity[$item['sku']] = $item['current_stock'] + ($committed[$key] ?? 0);
                     }
                     $serviceClass::updateInventoryBySkus($skuToQuantity);
                 }

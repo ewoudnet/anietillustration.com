@@ -16,9 +16,14 @@ namespace App;
  * onrechte verlagen. Alleen de "live" nieuwe-order-paden (WholesaleOrderImporter
  * met $deductStock=true) roepen dit aan.
  *
- * Idempotent via wholesale_orders.stock_deducted_at: een order wordt precies
- * één keer afgeschreven, ongeacht hoe vaak dezelfde webhook/cron-run hem
- * opnieuw tegenkomt (retries, overlappende polls).
+ * Idempotent via een atomische claim op wholesale_orders.stock_deducted_at
+ * (WholesaleOrderRepository::claimStockDeduction()/releaseStockDeduction()):
+ * een order wordt precies één keer afgeschreven, ook als dezelfde webhook/
+ * cron-run elkaar overlappen (retries, overlappende polls op trage/drukke
+ * runs). Bewust GEEN lees-dan-schrijf op stock_deducted_at meer (dat was de
+ * bug: twee overlappende runs zagen allebei "nog niet afgeschreven" en
+ * schreven de voorraad allebei af) - de UPDATE ... WHERE stock_deducted_at
+ * IS NULL/IS NOT NULL is zelf de enige bron van waarheid over wie "wint".
  */
 final class WholesaleStockDeductionService
 {
@@ -30,31 +35,30 @@ final class WholesaleStockDeductionService
      */
     public static function reconcile(
         int $orderId,
-        ?string $previousStockDeductedAt,
         string $newStatus,
         ?int $platformId,
         array $items
     ): bool {
-        $wasDeducted = $previousStockDeductedAt !== null;
-        $isCanceled = $newStatus === 'canceled';
+        if ($newStatus === 'canceled') {
+            if (!WholesaleOrderRepository::releaseStockDeduction($orderId)) {
+                // Was al niet (meer) afgeschreven - niets terug te boeken.
+                return false;
+            }
 
-        if ($isCanceled && $wasDeducted) {
             self::adjust($items, 1, $platformId, 'order_canceled');
-            WholesaleOrderRepository::setStockDeductedAt($orderId, null);
 
             return true;
         }
 
-        if (!$isCanceled && !$wasDeducted) {
-            self::adjust($items, -1, $platformId, 'order_placed');
-            WholesaleOrderRepository::setStockDeductedAt($orderId, (new \DateTimeImmutable())->format('Y-m-d H:i:s'));
-
-            return true;
+        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        if (!WholesaleOrderRepository::claimStockDeduction($orderId, $now)) {
+            // Al afgeschreven door deze of een overlappende aanroep - niet nogmaals.
+            return false;
         }
 
-        // Overige combinaties (bv. open -> confirmed, of nogmaals dezelfde
-        // status) raken de voorraad niet - die is al in de juiste staat.
-        return false;
+        self::adjust($items, -1, $platformId, 'order_placed');
+
+        return true;
     }
 
     /**

@@ -740,5 +740,62 @@ geen slaagkanskwestie: de verkeerde uitkomst zou als "gelukt" zijn doorgegaan.
   (of ermee vergeleken wordt) hoort de tijdzone expliciet gezet te worden.
   **Datum:** 2026-08-12
 
+- **Incident: grootschalige voorraadcorruptie (2026-08-18).** Drie
+  onafhankelijke problemen speelden tegelijk, ontdekt na een melding dat
+  voorraad "meerdere keren onterecht verminderd" was:
+  1. **Racecondition in `WholesaleStockDeductionService`:** `stock_deducted_at`
+     werd gelezen, dan pas geschreven - overlappende cron/webhook/handmatige
+     runs konden dezelfde order allebei als "nog niet afgeschreven" zien.
+     **Fix:** `WholesaleOrderRepository::claimStockDeduction()`/
+     `releaseStockDeduction()` doen nu een atomische
+     `UPDATE ... WHERE stock_deducted_at IS NULL/IS NOT NULL` (compare-and-set)
+     i.p.v. lees-dan-schrijf.
+  2. **Faire-veldverwarring:** `FaireService::fetchInventoryBySkus()` (lezen,
+     fase C) haalt bewust `available_quantity` op ("beschikbaar", al
+     verminderd met toegewezen orders), terwijl `updateInventoryBySkus()`
+     (schrijven, fase D) naar `on_hand_quantity` schrijft (het ruwe fysieke
+     aantal). Onze eigen `current_stock` is - net als Faire's
+     `available_quantity` - al verminderd met toegewezen orders (afschrijving
+     gebeurt al bij status "open", zie hierboven). Zonder correctie schreef
+     de sync dat al-verminderde getal in het RUWE veld, waardoor Faire
+     toegewezen orders een tweede keer aftrok (geverifieerd: SKU met 0
+     "huidige voorraad" en 20 "toegewezen" gaf −20 "beschikbaar" op Faire,
+     ondanks dat "doorgaan met verkopen bij nul voorraad" uitstond - die
+     instelling beschermt alleen het bestelproces van een klant, niet een
+     API-schrijfactie). **Fix:** `WholesaleOrderRepository::
+     committedQuantityByItem()` telt per platform op hoeveel er nog "in de
+     lucht" hangt (afgeschreven, niet-geannuleerd, nog niet verzonden) en
+     `WholesaleStockSyncService::run()` telt dat weer bij `current_stock` op
+     vóór het schrijven. **Nog onzeker, niet live geverifieerd:** of Faire's
+     eigen "toegewezen"-telling een order in status "shipped" nog meetelt -
+     bewust conservatief gehouden tot en met "confirmed".
+  3. **Losstaande, ongelogde legacy-tool:** `backend/settings/faire-sync.php`
+     (vóór de Wholesale-module gebouwd) haalde `available_quantity` op en
+     overschreef daarmee `current_stock` hard, voor de hele catalogus in één
+     keer, zonder één regel naar `stock_sync_log` te loggen. Dit liep volledig
+     los van fase D/E en verklaarde het overgrote deel van de schade -
+     zichtbaar als een vergelijkbare daling bij tientallen ongerelateerde
+     kaarten tegelijk, ook kaarten zonder ooit een wholesale-order.
+     **Fix:** uitgezet (`backend/settings/faire-sync.php` toont nu alleen een
+     waarschuwing, sync-logica verwijderd).
+  **Waarom dit zo lang onopgemerkt bleef:** geen van de drie mechanismes werd
+  door de andere twee gezien - (1) en (2) liepen alleen via
+  `stock_sync_log`, (3) logde helemaal niets, dus er was geen enkele plek
+  waar het totaalbeeld zichtbaar was.
+  **Herstel:** terugrekenen bleek niet mogelijk zodra (3) in beeld kwam
+  (geen audit-trail) - drie fysieke tellingen (SKU 20230904: systeem 85,
+  berekend 100, écht 101; SKU 251120: systeem 0, berekend 35, écht 47; SKU
+  260529: systeem 0, berekend 5, écht 25) bevestigden dat geen enkele
+  bestaande bron (lokale DB, Faire's eigen historie) nog betrouwbaar was.
+  Volledige fysieke hertelling van de catalogus was de enige overgebleven
+  optie; zie het gegenereerde telformulier (buiten dit repo, eenmalig
+  gedeeld) voor de prioritering (eerst de ~112 kaarten/producten die ooit in
+  een wholesale-order zaten, dan de rest met actieve voorraad).
+  **Openstaand:** de fase D-schrijfpad-fix hierboven is, net als de rest van
+  fase D, nog niet live tegen de echte API getest (zie eerdere beslissing) -
+  `sync_enabled` blijft op "Uit" totdat de hertelde voorraad is doorgevoerd
+  én er vertrouwen is in een kleinschalige, gecontroleerde eerste test.
+  **Datum:** 2026-08-18
+
 ## Zie ook
 [[products]], [[orders]], [[backend]]

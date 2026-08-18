@@ -72,25 +72,77 @@ final class WholesaleOrderRepository
     }
 
     /**
-     * Haalt een bestaande order op vóór een upsert, zodat de aanroeper de
-     * vorige status/stock_deducted_at kan vergelijken met de nieuwe (fase E,
-     * zie WholesaleStockDeductionService) - anders is na de upsert niet meer
-     * te zien of dit een nieuwe order of een statuswijziging was.
+     * Som van bestelde aantallen per product/kaart voor orders op dit platform
+     * die nog niet verzonden zijn (status open/confirmed) en waarvoor de
+     * voorraad al lokaal is afgeschreven - dus nog "toegewezen" bij het
+     * platform zelf staan. Gebruikt door WholesaleStockSyncService om dat
+     * bedrag weer bij `current_stock` op te tellen vóór het schrijven naar
+     * Faire's `on_hand_quantity`: die is bewust het RUWE fysieke aantal, niet
+     * (zoals onze eigen `current_stock`) al verminderd met toegewezen orders -
+     * zonder deze correctie trekt Faire toegewezen orders een tweede keer af,
+     * bovenop wat wij al hadden afgetrokken (zie docs/wholesale.md).
      *
-     * @return array<string, mixed>|null
+     * Onzeker, nog niet live geverifieerd: of Faire's eigen "toegewezen"-
+     * telling ook een order in status "shipped" nog meetelt. Bewust
+     * conservatief tot en met "confirmed" gehouden - een order die net is
+     * verzonden telt dus niet meer mee, wat bij een afwijkend Faire-gedrag
+     * een kleine onderschatting kan geven i.p.v. de eerdere, veel grotere
+     * overschatting.
+     *
+     * @return array<string, int> "product:<id>"|"card:<id>" => som aantal
      */
-    public static function findByPlatformAndExternalId(int $platformId, string $externalOrderId): ?array
+    public static function committedQuantityByItem(int $platformId): array
     {
-        return Database::fetchOne(
-            'SELECT * FROM wholesale_orders WHERE platform_id = ? AND external_order_id = ?',
-            'is',
-            [$platformId, $externalOrderId]
+        $rows = Database::fetchAll(
+            "SELECT woi.product_id, woi.card_id, SUM(woi.quantity) AS total_quantity
+             FROM wholesale_order_items woi
+             INNER JOIN wholesale_orders wo ON wo.id = woi.wholesale_order_id
+             WHERE wo.platform_id = ?
+               AND wo.stock_deducted_at IS NOT NULL
+               AND wo.status IN ('open', 'confirmed')
+             GROUP BY woi.product_id, woi.card_id",
+            'i',
+            [$platformId]
         );
+
+        $result = [];
+        foreach ($rows as $row) {
+            $key = $row['product_id'] !== null ? 'product:' . $row['product_id'] : 'card:' . $row['card_id'];
+            $result[$key] = (int) $row['total_quantity'];
+        }
+
+        return $result;
     }
 
-    public static function setStockDeductedAt(int $id, ?string $datetime): void
+    /**
+     * Atomische claim (i.p.v. lees-dan-schrijf) - dekt af dat de Faire-cron,
+     * de Orderchamp-webhook en een handmatige herhaling elkaar kunnen
+     * overlappen (zie WholesaleStockDeductionService). De WHERE stock_deducted_at
+     * IS NULL maakt dit een compare-and-set: geeft true terug (en claimt) als
+     * en alleen als deze aanroep de eerste was die de order als afgeschreven
+     * markeerde - een gelijktijdige tweede aanroep ziet 0 affected rows en
+     * schrijft dus niet nogmaals voorraad af.
+     */
+    public static function claimStockDeduction(int $id, string $datetime): bool
     {
-        Database::run('UPDATE wholesale_orders SET stock_deducted_at = ? WHERE id = ?', 'si', [$datetime, $id]);
+        return Database::affectedRows(
+            'UPDATE wholesale_orders SET stock_deducted_at = ? WHERE id = ? AND stock_deducted_at IS NULL',
+            'si',
+            [$datetime, $id]
+        ) > 0;
+    }
+
+    /**
+     * Tegenhanger van claimStockDeduction() voor een annulering - zelfde
+     * compare-and-set-principe, nu de andere kant op.
+     */
+    public static function releaseStockDeduction(int $id): bool
+    {
+        return Database::affectedRows(
+            'UPDATE wholesale_orders SET stock_deducted_at = NULL WHERE id = ? AND stock_deducted_at IS NOT NULL',
+            'i',
+            [$id]
+        ) > 0;
     }
 
     /**
