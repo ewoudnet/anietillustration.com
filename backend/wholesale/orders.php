@@ -51,11 +51,13 @@ $pagedOrders = array_slice($orders, ($page - 1) * WHOLESALE_ORDERS_PER_PAGE, WHO
 // Per valuta optellen, niet alles bij elkaar - orders van Faire zijn vaak USD,
 // niet EUR zoals bij specials, dus cross-currency samenvoegen zou een zinloos getal geven.
 $revenueByCurrency = [];
+$payoutByCurrency = [];
 foreach ($orders as $order) {
     if ($order['status'] === 'canceled') {
         continue;
     }
     $revenueByCurrency[$order['currency']] = ($revenueByCurrency[$order['currency']] ?? 0) + (int) $order['total_amount_cents'];
+    $payoutByCurrency[$order['currency']] = ($payoutByCurrency[$order['currency']] ?? 0) + (int) $order['payout_amount_cents'];
 }
 
 $exportQuery = http_build_query($filters);
@@ -75,7 +77,7 @@ require __DIR__ . '/../partials/layout-start.php';
         <div class="row" style="align-items: end;">
             <div class="field" style="flex: 2 1 220px;">
                 <label for="q">Zoeken</label>
-                <input type="text" id="q" name="q" placeholder="Shopnaam, SKU, producttitel, orderreferentie..." value="<?= h($filters['q']) ?>">
+                <input type="text" id="q" name="q" placeholder="Shopnaam, SKU, producttitel, orderreferentie..." value="<?= h($filters['q']) ?>" autocomplete="off">
             </div>
             <div class="field" style="flex: 1 1 160px;">
                 <label for="platform_id">Platform</label>
@@ -123,7 +125,13 @@ require __DIR__ . '/../partials/layout-start.php';
     <?php foreach ($revenueByCurrency as $currency => $cents): ?>
         <div class="stat-tile">
             <div class="value"><?= h(money($cents, $currency)) ?></div>
-            <div class="label">Omzet <?= h($currency) ?> (excl. geannuleerd, getoond)</div>
+            <div class="label">Omzet <?= h($currency) ?> (bruto, excl. geannuleerd, getoond)</div>
+        </div>
+    <?php endforeach; ?>
+    <?php foreach ($payoutByCurrency as $currency => $cents): ?>
+        <div class="stat-tile">
+            <div class="value"><?= h(money($cents, $currency)) ?></div>
+            <div class="label">Uitbetaald <?= h($currency) ?> (netto, excl. geannuleerd, getoond)</div>
         </div>
     <?php endforeach; ?>
 </div>
@@ -141,6 +149,7 @@ require __DIR__ . '/../partials/layout-start.php';
                     <th>Shop</th>
                     <th>Datum</th>
                     <th>Totaal</th>
+                    <th>Netto</th>
                     <th>Status</th>
                     <th>Acties</th>
                 </tr>
@@ -153,6 +162,7 @@ require __DIR__ . '/../partials/layout-start.php';
                         <td><?= h($order['shop_name'] ?? '—') ?></td>
                         <td><?= h((new DateTimeImmutable($order['placed_at']))->format('d-m-Y H:i')) ?></td>
                         <td><?= h(money((int) $order['total_amount_cents'], $order['currency'])) ?></td>
+                        <td><?= h(money((int) $order['payout_amount_cents'], $order['currency'])) ?></td>
                         <td><span class="badge <?= wholesaleOrderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span></td>
                         <td><a href="order-form.php?id=<?= (int) $order['id'] ?>">Bekijken</a></td>
                     </tr>

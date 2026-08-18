@@ -29,7 +29,7 @@ $statusLabels = [
 ];
 
 $rows = [
-    ['Platform', 'Referentie', 'Shop', 'Datum', 'Totaal', 'Valuta', 'Status'],
+    ['Platform', 'Referentie', 'Shop', 'Datum', 'Totaal', 'Commissie', 'Netto uitbetaald', 'Valuta', 'Status'],
 ];
 
 foreach ($orders as $order) {
@@ -39,6 +39,8 @@ foreach ($orders as $order) {
         $order['shop_name'] ?? '',
         (new DateTimeImmutable($order['placed_at']))->format('d-m-Y H:i'),
         round(((int) $order['total_amount_cents']) / 100, 2),
+        round(((int) $order['commission_amount_cents']) / 100, 2),
+        round(((int) $order['payout_amount_cents']) / 100, 2),
         $order['currency'],
         $statusLabels[$order['status']] ?? $order['status'],
     ];

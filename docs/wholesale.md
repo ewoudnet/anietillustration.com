@@ -44,6 +44,9 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   `fetchRetailer()`, beide live geverifieerd tegen de echte Faire-API.
 - `src/SkuResolver.php` — matcht een externe SKU tegen `cards` óf `products`
   (zelfde twee-tabellen-aanpak als de bestaande Faire-voorraadsync).
+- `sql/migrations/009_wholesale_payout.sql` (+ schema.sql) —
+  `wholesale_orders.payout_amount_cents`/`commission_amount_cents` (netto-
+  uitbetaling na commissie/fees, naast het bestaande brutototaal).
 - `src/WholesaleOrderImporter.php` — normaliseert Faire/Orderchamp-orders naar
   het eigen model en schrijft ze weg (shop + order + regels); hergebruikt
   voor zowel de historische import (fase B) als de live nieuwe-order-detectie
@@ -254,8 +257,49 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   volledig op de webhook).
 - [ ] Deel 2 (B2B-webshop, zie "Doel" hierboven) — nog niet gestart, wacht op
   een go-beslissing en een niet-verwarrende naam naast deze sectie.
+- [x] **Netto-uitbetaling (payout) naast bruto-orderbedrag (2026-08-18):**
+  `wholesale_orders` heeft nu ook `payout_amount_cents`/`commission_amount_cents`
+  naast het bestaande `total_amount_cents`. Zichtbaar op `orders.php`
+  (kolom + aparte "Uitbetaald"-stat-tiles per valuta, naast de bestaande
+  "Omzet"-tiles), `order-form.php` (Commissie + Netto uitbetaald) en
+  `orders-export.php`. Gevuld door `WholesaleOrderImporter` bij elke
+  import/webhook/cron-run (zowel historisch als live) - geen apart
+  backfill-script nodig, want de historische import (`import.php`) is
+  idempotent en kan gewoon opnieuw doorlopen worden om bestaande orders
+  bij te werken. Zie de beslissing hieronder voor de herkomst per platform.
 
 ## Getest
+**Payout/commissie (2026-08-18):** eerst live, read-only tegen de echte
+Faire-/Orderchamp-API opgezocht of/hoe het nettobedrag beschikbaar is (zie
+Beslissingen) - Faire's `payout_costs` bleek al in elke orderrespons te
+zitten, Orderchamp's `commissionPrice` moest als nieuw veld aan de
+GraphQL-query toegevoegd worden (schema accepteerde het meteen, live
+bevestigd: `commissionPrice = commissionPercentage x subtotalPrice`).
+
+Daarna een losstaande, wegwerpbare MariaDB-container (schema.sql + migratie
+009 + wegwerp-stubs voor `products`/`cards`/`card_sales_channels`, zelfde
+aanpak als eerdere fases) en daarop een **echte** `importFairePage()`/
+`importOrderchampPage()` tegen de live Faire-/Orderchamp-API (bestaande
+tokens), wegschrijvend naar de wegwerp-database, nooit naar de live database:
+- 50 Faire- + 50 Orderchamp-orders geïmporteerd. Voor `DELIVERED`-orders
+  kloppen `commission_amount_cents`/`payout_amount_cents` met de eerder
+  handmatig gecontroleerde live waarden; voor `CANCELED`-orders staan beide
+  netjes op 0.
+- Orderchamp: `total_amount_cents - commission_amount_cents ==
+  payout_amount_cents` klopte exact op alle gecontroleerde orders (het is per
+  definitie zo berekend, geen verrassing, maar bevestigt dat `commissionPrice`
+  correct in centen omgezet wordt).
+- Herhaald importeren van dezelfde Faire-pagina gaf exact hetzelfde
+  rijenaantal (idempotent, geen duplicaten, bestaande upsert-logica ongewijzigd
+  qua idempotentie).
+- `products.current_stock` bleef ongewijzigd (stub bevatte sowieso geen
+  voorraad) - bevestigt dat deze wijziging geen voorraadpad raakt.
+
+**Bewust niet getest:** de UI zelf (`orders.php`/`order-form.php`/
+`orders-export.php`) tegen echte data - de query/berekening is met dezelfde
+data al bevestigd correct, en de UI-wijziging zelf is triviaal (bestaande
+`money()`-cellen/kolommen, geen nieuwe logica).
+
 **Fase E (2026-08-12):** eerst uitgezocht of Faire een webhook-API heeft
 (nee - de volledige OpenAPI-spec doorzocht, geen "webhook" te vinden, alleen
 de bekende 26 REST-paden) en hoe Orderchamp's order-webhook precies werkt
@@ -490,6 +534,28 @@ geen slaagkanskwestie: de verkeerde uitkomst zou als "gelukt" zijn doorgegaan.
   interne API-ID. Beide zijn gegarandeerd uniek (display_id is een
   deterministische afleiding van id).
   **Datum:** 2026-08-12
+- **Beslissing:** `payout_amount_cents`/`commission_amount_cents` (2026-08-18)
+  komen bij Faire uit het al aanwezige `payout_costs`-object op elke order
+  (`total_payout`/`commission`, beide `{amount_minor, currency}`) - dit veld
+  zat al in elke `GET /orders`-response (dus ook al in `raw_payload`), maar
+  werd nog nergens uitgelezen. Bij Orderchamp bestaat geen kant-en-klaar
+  netto-veld; berekend als `totalPrice - commissionPrice` (nieuw opgevraagd
+  GraphQL-veld, niet eerder in de query). Beide live geverifieerd (zie
+  "Getest") tegen de echte APIs met het bestaande `FAIRE_ACCESS_TOKEN`/
+  `ORDERCHAMP_ACCESS_TOKEN`, read-only.
+  **Waarom:** de gebruiker vroeg expliciet naar het na-commissie/uitbetaalde
+  bedrag i.p.v. het bruto-orderbedrag dat al werd getoond.
+  **Datum:** 2026-08-18
+- **Bevinding (geen bug, wel belangrijk):** Faire's `payout_costs.total_payout`
+  is NIET simpelweg `total_amount_cents - commission`.
+  **Waarom:** live getest op 50 echte, geleverde orders - `total_payout`
+  wijkt regelmatig af van `items_total - commissie` omdat er ook
+  `shipping_subsidy`, `total_brand_discounts` en `net_tax` in verwerkt zitten.
+  `payout_amount_cents` is dus het preciezere, maar ook complexere getal;
+  `total_amount_cents` blijft simpelweg de som van de regels. Bij Orderchamp
+  is dit wél een exacte aftrek (`totalPrice - commissionPrice`), want daar is
+  het zelf berekend i.p.v. van Orderchamp overgenomen.
+  **Datum:** 2026-08-18
 - **Beslissing:** `wholesale_orders.total_amount_cents` voor Faire wordt
   berekend als som van `item.price × quantity` over alle regels, niet
   overgenomen van een kant-en-klaar totaalveld.

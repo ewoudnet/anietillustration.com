@@ -171,6 +171,10 @@ CREATE TABLE IF NOT EXISTS wholesale_orders (
     placed_at DATETIME NOT NULL,
     currency CHAR(3) NOT NULL DEFAULT 'EUR',
     total_amount_cents INT UNSIGNED NOT NULL DEFAULT 0,
+    -- Netto-uitbetaling na commissie/fees (Faire: payout_costs.total_payout,
+    -- Orderchamp: totalPrice - commissionPrice) - zie docs/wholesale.md.
+    payout_amount_cents INT UNSIGNED NOT NULL DEFAULT 0,
+    commission_amount_cents INT UNSIGNED NOT NULL DEFAULT 0,
     raw_payload JSON DEFAULT NULL,
     imported_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     canceled_at DATETIME DEFAULT NULL,

@@ -140,14 +140,14 @@ final class WholesaleOrderRepository
      * WholesaleOrderImporter. Nooit aangeroepen buiten import/sync-code, en
      * raakt zelf nooit products.current_stock/cards.current_stock.
      *
-     * @param array{platform_id: int, external_order_id: string, shop_id: ?int, status: string, placed_at: string, currency: string, total_amount_cents: int, canceled_at: ?string, raw_payload: array<string, mixed>} $data
+     * @param array{platform_id: int, external_order_id: string, shop_id: ?int, status: string, placed_at: string, currency: string, total_amount_cents: int, payout_amount_cents: int, commission_amount_cents: int, canceled_at: ?string, raw_payload: array<string, mixed>} $data
      */
     public static function upsert(array $data): int
     {
         return Database::insert(
             'INSERT INTO wholesale_orders
-                (platform_id, external_order_id, shop_id, status, placed_at, currency, total_amount_cents, canceled_at, raw_payload)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (platform_id, external_order_id, shop_id, status, placed_at, currency, total_amount_cents, payout_amount_cents, commission_amount_cents, canceled_at, raw_payload)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE
                 id = LAST_INSERT_ID(id),
                 shop_id = VALUES(shop_id),
@@ -155,9 +155,11 @@ final class WholesaleOrderRepository
                 placed_at = VALUES(placed_at),
                 currency = VALUES(currency),
                 total_amount_cents = VALUES(total_amount_cents),
+                payout_amount_cents = VALUES(payout_amount_cents),
+                commission_amount_cents = VALUES(commission_amount_cents),
                 canceled_at = VALUES(canceled_at),
                 raw_payload = VALUES(raw_payload)',
-            'isisssiss',
+            'isisssiiiss',
             [
                 $data['platform_id'],
                 $data['external_order_id'],
@@ -166,6 +168,8 @@ final class WholesaleOrderRepository
                 $data['placed_at'],
                 $data['currency'],
                 $data['total_amount_cents'],
+                $data['payout_amount_cents'],
+                $data['commission_amount_cents'],
                 $data['canceled_at'],
                 json_encode($data['raw_payload'], JSON_UNESCAPED_UNICODE),
             ]

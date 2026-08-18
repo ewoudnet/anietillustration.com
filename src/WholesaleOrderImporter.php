@@ -190,6 +190,7 @@ final class WholesaleOrderImporter
         }
 
         $state = (string) ($raw['state'] ?? 'NEW');
+        $payoutCosts = $raw['payout_costs'] ?? [];
 
         return [
             'external_order_id' => (string) ($raw['display_id'] ?? $raw['id']),
@@ -197,6 +198,10 @@ final class WholesaleOrderImporter
             'placed_at' => self::toMysqlDateTime($raw['created_at'] ?? null),
             'currency' => $currency,
             'total_amount_cents' => $totalCents,
+            // De nettouitkering aan het merk NA commissie/fees - een ander (en
+            // preciezer) getal dan total_amount_cents, zie docs/wholesale.md.
+            'payout_amount_cents' => (int) ($payoutCosts['total_payout']['amount_minor'] ?? 0),
+            'commission_amount_cents' => (int) ($payoutCosts['commission']['amount_minor'] ?? 0),
             'canceled_at' => $state === 'CANCELED' ? self::toMysqlDateTime($raw['updated_at'] ?? null) : null,
             'raw_payload' => $raw,
             'shop' => $shop,
@@ -246,13 +251,20 @@ final class WholesaleOrderImporter
         }
 
         $status = (string) ($raw['status'] ?? 'OPEN');
+        $totalCents = self::moneyToCents($raw['totalPrice'] ?? null);
+        // Orderchamp levert geen los "netto"-veld - commissionPrice is wel
+        // beschikbaar (live geverifieerd: commissionPercentage x subtotalPrice,
+        // dus excl. btw/verzending), zie docs/wholesale.md.
+        $commissionCents = self::moneyToCents($raw['commissionPrice'] ?? null);
 
         return [
             'external_order_id' => (string) ($raw['number'] ?? $raw['reference'] ?? $raw['id']),
             'status' => self::ORDERCHAMP_STATUS_MAP[$status] ?? 'open',
             'placed_at' => self::toMysqlDateTime($raw['createdAt'] ?? null),
             'currency' => (string) ($raw['currency'] ?? 'EUR'),
-            'total_amount_cents' => self::moneyToCents($raw['totalPrice'] ?? null),
+            'total_amount_cents' => $totalCents,
+            'payout_amount_cents' => max(0, $totalCents - $commissionCents),
+            'commission_amount_cents' => $commissionCents,
             'canceled_at' => self::toMysqlDateTime($raw['cancelledAt'] ?? null),
             'raw_payload' => $raw,
             'shop' => $shop,
@@ -289,6 +301,8 @@ final class WholesaleOrderImporter
             'placed_at' => $normalized['placed_at'],
             'currency' => $normalized['currency'],
             'total_amount_cents' => $normalized['total_amount_cents'],
+            'payout_amount_cents' => $normalized['payout_amount_cents'],
+            'commission_amount_cents' => $normalized['commission_amount_cents'],
             'canceled_at' => $normalized['canceled_at'],
             'raw_payload' => $normalized['raw_payload'],
         ]);

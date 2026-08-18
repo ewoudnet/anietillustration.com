@@ -23,6 +23,10 @@ namespace App;
  *   geverifieerd tegen de echte API (zie docs/wholesale.md) - twee
  *   eigenaardigheden die niet uit de schema-docs te halen waren staan
  *   gedocumenteerd bij fetchOrdersPage().
+ * - `commissionPrice` (2026-08-18 toegevoegd, zie docs/wholesale.md) is live
+ *   geverifieerd: exact `commissionPercentage x subtotalPrice`, dus de
+ *   commissie wordt berekend over het subtotaal excl. btw/verzending, niet
+ *   over `totalPrice`.
  *
  * `inventoryLevelBulkAdjust` (fase D, voorraad SCHRIJVEN) opgezocht op
  * 2026-08-12 via de publieke schema-referentie (developers.orderchamp.com/
@@ -116,6 +120,7 @@ final class OrderchampService
                         status
                         currency
                         totalPrice
+                        commissionPrice
                         createdAt
                         updatedAt
                         cancelledAt
@@ -194,6 +199,7 @@ final class OrderchampService
                     status
                     currency
                     totalPrice
+                    commissionPrice
                     createdAt
                     updatedAt
                     cancelledAt

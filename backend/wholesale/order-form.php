@@ -57,6 +57,8 @@ require __DIR__ . '/../partials/layout-start.php';
         <div style="flex: 1 1 200px;"><strong>Geplaatst op</strong><br><?= h((new DateTimeImmutable($order['placed_at']))->format('d-m-Y H:i')) ?></div>
         <div style="flex: 1 1 200px;"><strong>Status</strong><br><span class="badge <?= wholesaleOrderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span></div>
         <div style="flex: 1 1 200px;"><strong>Totaal</strong><br><?= h(money((int) $order['total_amount_cents'], $order['currency'])) ?></div>
+        <div style="flex: 1 1 200px;"><strong>Commissie</strong><br><?= h(money((int) $order['commission_amount_cents'], $order['currency'])) ?></div>
+        <div style="flex: 1 1 200px;"><strong>Netto uitbetaald</strong><br><?= h(money((int) $order['payout_amount_cents'], $order['currency'])) ?></div>
     </div>
     <?php if ($order['canceled_at'] !== null): ?>
         <p class="hint" style="margin-top: 12px;">Geannuleerd op <?= h((new DateTimeImmutable($order['canceled_at']))->format('d-m-Y H:i')) ?>.</p>
