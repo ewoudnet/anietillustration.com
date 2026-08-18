@@ -82,7 +82,7 @@ require __DIR__ . '/../partials/layout-start.php';
         <div class="row" style="align-items: end;">
             <div class="field" style="flex: 2 1 220px;">
                 <label for="q">Zoeken</label>
-                <input type="text" id="q" name="q" placeholder="SKU of titel..." value="<?= h($filters['q']) ?>">
+                <input type="text" id="q" name="q" placeholder="SKU of titel..." value="<?= h($filters['q']) ?>" autocomplete="off">
             </div>
             <div class="field" style="flex: 1 1 200px;">
                 <label for="sales_channel_id">Verkoopkanaal</label>
@@ -187,7 +187,7 @@ require __DIR__ . '/../partials/layout-start.php';
                             <?php endif; ?>
                         </td>
                         <td class="reference"><?= h($cardRow['sku']) ?></td>
-                        <td><?= h($cardRow['title']) ?></td>
+                        <td><a class="title-link" href="card-form.php?id=<?= (int) $cardRow['id'] ?>"><?= h($cardRow['title']) ?></a></td>
                         <td>
                             <?php foreach ($cardRow['sales_channels'] as $channel): ?>
                                 <span class="badge badge-channel" style="background-color: <?= h($channel['color']) ?>;"><?= h($channel['abbreviation']) ?></span>

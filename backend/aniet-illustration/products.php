@@ -63,7 +63,7 @@ require __DIR__ . '/../partials/layout-start.php';
         <div class="row" style="align-items: end;">
             <div class="field" style="flex: 2 1 220px;">
                 <label for="q">Zoeken</label>
-                <input type="text" id="q" name="q" placeholder="SKU of titel..." value="<?= h($filters['q']) ?>">
+                <input type="text" id="q" name="q" placeholder="SKU of titel..." value="<?= h($filters['q']) ?>" autocomplete="off">
             </div>
             <div class="field" style="flex: 0 0 auto;">
                 <button type="submit" class="btn" style="width: auto; margin-top: 0;">Filteren</button>
@@ -106,7 +106,7 @@ require __DIR__ . '/../partials/layout-start.php';
                             <?php endif; ?>
                         </td>
                         <td class="reference"><?= h($product['sku']) ?></td>
-                        <td><?= h($product['title']) ?></td>
+                        <td><a class="title-link" href="product-form.php?type_id=<?= (int) $typeId ?>&id=<?= (int) $product['id'] ?>"><?= h($product['title']) ?></a></td>
                         <td>
                             <div class="actions-dropdown">
                                 <button type="button" class="icon-btn actions-trigger" title="Acties" aria-label="Acties">⋮</button>

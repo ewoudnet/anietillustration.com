@@ -565,6 +565,17 @@ legend {
     border-radius: 4px;
 }
 
+.title-link {
+    color: var(--color-text);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.title-link:hover {
+    color: var(--color-accent-dark);
+    text-decoration: underline;
+}
+
 .field-error {
     color: var(--color-error-text);
     font-size: 0.8rem;

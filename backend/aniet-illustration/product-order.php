@@ -92,7 +92,7 @@ require __DIR__ . '/../partials/layout-start.php';
                             <?php endif; ?>
                         </td>
                         <td class="reference"><?= h($product['sku']) ?></td>
-                        <td><?= h($product['title']) ?></td>
+                        <td><a class="title-link" href="product-form.php?type_id=<?= (int) $typeId ?>&id=<?= (int) $product['id'] ?>"><?= h($product['title']) ?></a></td>
                         <td data-min-stock-display><?= (int) $product['min_stock'] ?></td>
                         <td data-current-stock-display><?= $product['current_stock'] !== null ? (int) $product['current_stock'] : '—' ?></td>
                         <td>
@@ -146,7 +146,7 @@ require __DIR__ . '/../partials/layout-start.php';
                         </td>
                         <td class="reference"><?= h($product['sku']) ?></td>
                         <td>
-                            <?= h($product['title']) ?>
+                            <a class="title-link" href="product-form.php?type_id=<?= (int) $typeId ?>&id=<?= (int) $product['id'] ?>"><?= h($product['title']) ?></a>
                             <?php if ((int) $product['wholesale_draft'] === 1): ?>
                                 <span class="badge badge-muted">Draft</span>
                             <?php endif; ?>

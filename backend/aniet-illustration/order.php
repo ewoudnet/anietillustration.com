@@ -79,7 +79,7 @@ require __DIR__ . '/../partials/layout-start.php';
                             <?php endif; ?>
                         </td>
                         <td class="reference"><?= h($cardRow['sku']) ?></td>
-                        <td><?= h($cardRow['title']) ?></td>
+                        <td><a class="title-link" href="card-form.php?id=<?= (int) $cardRow['id'] ?>"><?= h($cardRow['title']) ?></a></td>
                         <td data-min-stock-display><?= (int) $cardRow['min_stock'] ?></td>
                         <td data-current-stock-display><?= $cardRow['current_stock'] !== null ? (int) $cardRow['current_stock'] : '—' ?></td>
                         <td>
@@ -132,7 +132,7 @@ require __DIR__ . '/../partials/layout-start.php';
                         </td>
                         <td class="reference"><?= h($cardRow['sku']) ?></td>
                         <td>
-                            <?= h($cardRow['title']) ?>
+                            <a class="title-link" href="card-form.php?id=<?= (int) $cardRow['id'] ?>"><?= h($cardRow['title']) ?></a>
                             <?php if ((int) $cardRow['wholesale_draft'] === 1): ?>
                                 <span class="badge badge-muted">Draft</span>
                             <?php endif; ?>
