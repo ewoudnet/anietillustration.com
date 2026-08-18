@@ -269,11 +269,6 @@ final class ProductRepository
         Database::run('UPDATE products SET to_order = ? WHERE id = ?', 'ii', [$toOrder, $id]);
     }
 
-    public static function updateCurrentStock(int $id, ?int $stock): void
-    {
-        Database::run('UPDATE products SET current_stock = ? WHERE id = ?', 'ii', [$stock, $id]);
-    }
-
     /**
      * Atomische op-/aftelling (i.p.v. lees-dan-schrijf) - gebruikt door
      * WholesaleStockDeductionService (fase E) zodat een webhook en een

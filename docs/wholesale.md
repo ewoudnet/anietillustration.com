@@ -797,5 +797,32 @@ geen slaagkanskwestie: de verkeerde uitkomst zou als "gelukt" zijn doorgegaan.
   én er vertrouwen is in een kleinschalige, gecontroleerde eerste test.
   **Datum:** 2026-08-18
 
+- **Voorraadsimulatie toegevoegd** (`backend/wholesale/simulatie.php` +
+  `WholesaleStockSimulationService`), direct na bovenstaand incident, als
+  "doen alsof"-observatieperiode: Faire lezen, orders laten binnenkomen en
+  lokale voorraad herberekenen loopt gewoon door (allemaal al bestaande,
+  leesalleen paden), maar er wordt expliciet **niets** teruggeschreven -
+  deze pagina roept `updateInventoryBySkus()` nergens aan. Toont per SKU
+  naast elkaar: lokale `current_stock`, wat live "beschikbaar" is bij Faire/
+  Orderchamp, onze eigen "toegewezen"-telling
+  (`WholesaleOrderRepository::committedQuantityByItem()`), en het
+  "simulated on-hand"-getal dat we ZOUDEN schrijven als sync aan stond
+  (`current_stock + toegewezen`).
+  **Beperking:** bij Faire is alleen `available_quantity` bevestigd leesbaar
+  (zie `FaireService`-docblock) - geen bevestigde manier om het echte
+  `on_hand_quantity` te lezen zonder er zelf naar te schrijven. Het
+  "simulated on-hand"-getal voor Faire is dus onze eigen berekening, met een
+  expliciete instructie op de pagina om dat handmatig te vergelijken met
+  "huidige voorraad" in Faire's eigen dashboard. Bij Orderchamp kan wel
+  zowel on-hand (`InventoryLevel.quantity`) als beschikbaar
+  (`InventoryLevel.availableQuantity`) rechtstreeks gelezen worden
+  (`OrderchampService::fetchFullInventoryBySkus()`, schema-geverifieerd via
+  developers.orderchamp.com/types/InventoryLevel).
+  **Waarom een aparte pagina i.p.v. uitbreiden van `sku-comparison.php`:**
+  expliciete gebruikerswens om dit als een aparte, tijdelijke
+  observatietool te behandelen tijdens het herstel, niet als permanente
+  uitbreiding van de bestaande vergelijkingspagina.
+  **Datum:** 2026-08-18
+
 ## Zie ook
 [[products]], [[orders]], [[backend]]

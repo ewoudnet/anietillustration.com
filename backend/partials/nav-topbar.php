@@ -89,6 +89,7 @@ $sectionEntryPages = [
         <a href="<?= h(BACKEND_BASE) ?>/wholesale/import.php" class="<?= $activePage === 'import' ? 'active' : '' ?>">Historische import</a>
         <a href="<?= h(BACKEND_BASE) ?>/wholesale/shops.php" class="<?= $activePage === 'shops' ? 'active' : '' ?>">Shops &amp; kaart</a>
         <a href="<?= h(BACKEND_BASE) ?>/wholesale/sku-comparison.php" class="<?= $activePage === 'sku-comparison' ? 'active' : '' ?>">SKU-vergelijking</a>
+        <a href="<?= h(BACKEND_BASE) ?>/wholesale/simulatie.php" class="<?= $activePage === 'simulatie' ? 'active' : '' ?>">Voorraadsimulatie</a>
         <a href="<?= h(BACKEND_BASE) ?>/wholesale/sync-log.php" class="<?= $activePage === 'sync-log' ? 'active' : '' ?>">Synchronisatielog</a>
         <a href="<?= h(BACKEND_BASE) ?>/wholesale/settings.php" class="<?= $activePage === 'settings' ? 'active' : '' ?>">Instellingen</a>
     </nav>

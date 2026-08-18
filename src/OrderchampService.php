@@ -283,6 +283,57 @@ final class OrderchampService
     }
 
     /**
+     * Leesalleen, voor de voorraadsimulatie (backend/wholesale/simulatie.php):
+     * haalt zowel het ruwe fysieke aantal (`InventoryLevel.quantity`) als het
+     * beschikbare aantal (`InventoryLevel.availableQuantity`) op via de
+     * primaire locatie - schema-geverifieerd op developers.orderchamp.com
+     * (types/InventoryLevel), nooit een schrijf-aanroep. `inventoryLevels(first: 1)`
+     * gaat uit van één (de standaard/primaire) locatie; bij meerdere locaties
+     * geeft dit dus niet het totaal.
+     *
+     * @param array<int, string> $skus
+     * @return array<string, array{onHand: ?int, available: ?int}>
+     */
+    public static function fetchFullInventoryBySkus(array $skus): array
+    {
+        $skus = array_values(array_unique(array_filter($skus, static fn (string $s): bool => $s !== '')));
+        if ($skus === []) {
+            return [];
+        }
+
+        $query = <<<'GRAPHQL'
+            query WholesaleFullInventory($skus: [String], $first: Int) {
+                productVariants(skus: $skus, first: $first) {
+                    nodes {
+                        sku
+                        inventoryLevels(first: 1) {
+                            nodes {
+                                quantity
+                                availableQuantity
+                            }
+                        }
+                    }
+                }
+            }
+            GRAPHQL;
+
+        $result = [];
+        foreach (array_chunk($skus, self::INVENTORY_SKUS_PER_REQUEST) as $chunk) {
+            $response = self::request($query, ['skus' => $chunk, 'first' => count($chunk)]);
+
+            foreach ($response['data']['productVariants']['nodes'] ?? [] as $node) {
+                $level = $node['inventoryLevels']['nodes'][0] ?? null;
+                $result[$node['sku']] = [
+                    'onHand' => $level !== null && $level['quantity'] !== null ? (int) $level['quantity'] : null,
+                    'available' => $level !== null && $level['availableQuantity'] !== null ? (int) $level['availableQuantity'] : null,
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Schrijft voorraadaantallen terug naar Orderchamp (fase D). Roep dit
      * alleen aan als het platform sync_enabled=1 heeft - deze methode zelf
      * controleert dat niet, dat is de verantwoordelijkheid van de aanroeper
