@@ -225,11 +225,11 @@ final class WholesaleOrderRepository
             $conditions[] = '(s.name LIKE ? OR wo.external_order_id LIKE ?
                 OR EXISTS (SELECT 1 FROM wholesale_order_items woi
                            WHERE woi.wholesale_order_id = wo.id
-                             AND (woi.sku LIKE ? OR woi.title_snapshot LIKE ?)))';
+                             AND (woi.sku = ? OR woi.title_snapshot LIKE ?)))';
             $types .= 'ssss';
             $params[] = $like;
             $params[] = $like;
-            $params[] = $like;
+            $params[] = $q;
             $params[] = $like;
         }
 

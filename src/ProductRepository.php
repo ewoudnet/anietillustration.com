@@ -55,11 +55,10 @@ final class ProductRepository
 
         $q = trim((string) ($filters['q'] ?? ''));
         if ($q !== '') {
-            $conditions[] = '(p.sku LIKE ? OR p.title LIKE ?)';
+            $conditions[] = '(p.sku = ? OR p.title LIKE ?)';
             $types .= 'ss';
-            $like = '%' . $q . '%';
-            $params[] = $like;
-            $params[] = $like;
+            $params[] = $q;
+            $params[] = '%' . $q . '%';
         }
 
         return ['WHERE ' . implode(' AND ', $conditions), $types, $params];

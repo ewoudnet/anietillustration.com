@@ -51,11 +51,10 @@ final class CardRepository
 
         $q = trim((string) ($filters['q'] ?? ''));
         if ($q !== '') {
-            $conditions[] = '(c.sku LIKE ? OR c.title LIKE ?)';
+            $conditions[] = '(c.sku = ? OR c.title LIKE ?)';
             $types .= 'ss';
-            $like = '%' . $q . '%';
-            $params[] = $like;
-            $params[] = $like;
+            $params[] = $q;
+            $params[] = '%' . $q . '%';
         }
 
         $salesChannelId = (int) ($filters['sales_channel_id'] ?? 0);
