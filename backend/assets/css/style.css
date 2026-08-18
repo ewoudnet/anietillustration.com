@@ -104,6 +104,22 @@ a {
     font-size: 0.8rem;
 }
 
+/* Losse checkbox-toggle binnen een .field (bv. "Wholesale Draft", "Voorraad
+   synchroniseren") - de .field-regels hierboven zijn bedoeld voor tekstvelden
+   (label boven, input daaronder op 100% breedte) en maken een genest
+   checkbox-label anders onbruikbaar breed en op een eigen regel. */
+.field.field-checkbox label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.field-checkbox input[type="checkbox"] {
+    width: auto;
+    flex-shrink: 0;
+}
+
 .btn {
     display: inline-block;
     width: 100%;

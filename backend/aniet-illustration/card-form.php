@@ -362,7 +362,7 @@ require __DIR__ . '/../partials/layout-start.php';
                 </div>
             </div>
             <?php if (Auth::isAdmin()): ?>
-                <div class="field" style="margin-top: 10px;">
+                <div class="field field-checkbox" style="margin-top: 10px;">
                     <label>
                         <input type="checkbox" id="sync_now" name="sync_now" value="1">
                         Voorraad direct synchroniseren naar Faire/Orderchamp na opslaan
@@ -379,8 +379,10 @@ require __DIR__ . '/../partials/layout-start.php';
             </div>
         </fieldset>
 
-        <button type="submit" class="btn"><?= $existing !== null ? 'Opslaan' : 'Kaart toevoegen' ?></button>
-        <a href="cards.php" class="btn btn-secondary">Annuleren</a>
+        <div class="row" style="margin-top: 6px;">
+            <button type="submit" class="btn" style="width: auto;"><?= $existing !== null ? 'Opslaan' : 'Kaart toevoegen' ?></button>
+            <a href="cards.php" class="btn btn-secondary" style="width: auto;">Annuleren</a>
+        </div>
     </form>
 </div>
 <script>

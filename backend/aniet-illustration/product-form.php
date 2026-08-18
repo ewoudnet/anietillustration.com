@@ -214,7 +214,7 @@ require __DIR__ . '/../partials/layout-start.php';
                     <small class="hint">Kan ook direct op de bestelpagina aangepast worden.</small>
                 </div>
             </div>
-            <div class="field" style="margin-top: 10px;">
+            <div class="field field-checkbox" style="margin-top: 10px;">
                 <label>
                     <input type="checkbox" id="wholesale_draft" name="wholesale_draft" value="1" <?= $values['wholesale_draft'] === 1 ? 'checked' : '' ?>>
                     Wholesale Draft
@@ -222,7 +222,7 @@ require __DIR__ . '/../partials/layout-start.php';
                 <small class="hint">Draft-producten met 0 of lage voorraad verschijnen niet automatisch in de bestellijst; alleen via het aparte draft-filter of een expliciete "te bestellen".</small>
             </div>
             <?php if (Auth::isAdmin()): ?>
-                <div class="field" style="margin-top: 10px;">
+                <div class="field field-checkbox" style="margin-top: 10px;">
                     <label>
                         <input type="checkbox" id="sync_now" name="sync_now" value="1">
                         Voorraad direct synchroniseren naar Faire/Orderchamp na opslaan
@@ -239,8 +239,10 @@ require __DIR__ . '/../partials/layout-start.php';
             </div>
         </fieldset>
 
-        <button type="submit" class="btn"><?= $existing !== null ? 'Opslaan' : 'Product toevoegen' ?></button>
-        <a href="products.php?type_id=<?= (int) $typeId ?>" class="btn btn-secondary">Annuleren</a>
+        <div class="row" style="margin-top: 6px;">
+            <button type="submit" class="btn" style="width: auto;"><?= $existing !== null ? 'Opslaan' : 'Product toevoegen' ?></button>
+            <a href="products.php?type_id=<?= (int) $typeId ?>" class="btn btn-secondary" style="width: auto;">Annuleren</a>
+        </div>
     </form>
 </div>
 <?php require __DIR__ . '/../partials/layout-end.php'; ?>
