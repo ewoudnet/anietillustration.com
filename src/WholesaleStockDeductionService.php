@@ -24,6 +24,9 @@ final class WholesaleStockDeductionService
 {
     /**
      * @param array<int, array{sku: string, quantity: int, product_id: ?int, card_id: ?int}> $items
+     * @return bool of de lokale voorraad daadwerkelijk is aangepast - de
+     *              aanroeper gebruikt dit om te bepalen of fase D (outbound
+     *              sync naar Faire/Orderchamp) nog moet draaien.
      */
     public static function reconcile(
         int $orderId,
@@ -31,7 +34,7 @@ final class WholesaleStockDeductionService
         string $newStatus,
         ?int $platformId,
         array $items
-    ): void {
+    ): bool {
         $wasDeducted = $previousStockDeductedAt !== null;
         $isCanceled = $newStatus === 'canceled';
 
@@ -39,16 +42,19 @@ final class WholesaleStockDeductionService
             self::adjust($items, 1, $platformId, 'order_canceled');
             WholesaleOrderRepository::setStockDeductedAt($orderId, null);
 
-            return;
+            return true;
         }
 
         if (!$isCanceled && !$wasDeducted) {
             self::adjust($items, -1, $platformId, 'order_placed');
             WholesaleOrderRepository::setStockDeductedAt($orderId, (new \DateTimeImmutable())->format('Y-m-d H:i:s'));
+
+            return true;
         }
 
         // Overige combinaties (bv. open -> confirmed, of nogmaals dezelfde
         // status) raken de voorraad niet - die is al in de juiste staat.
+        return false;
     }
 
     /**

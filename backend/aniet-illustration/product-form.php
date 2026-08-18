@@ -9,6 +9,7 @@ use App\Csrf;
 use App\ImageUpload;
 use App\ProductRepository;
 use App\ProductTypeRepository;
+use App\WholesaleStockSyncService;
 
 Auth::requireSection('aniet-illustration');
 
@@ -117,13 +118,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'wholesale_draft' => $values['wholesale_draft'],
             ];
 
-            if ($id !== null) {
-                ProductRepository::update($id, $data);
-                header('Location: products.php?type_id=' . $typeId . '&updated=1');
-            } else {
+            $wasCreate = $id === null;
+            if ($wasCreate) {
                 $id = ProductRepository::create($data);
-                header('Location: products.php?type_id=' . $typeId . '&created=1');
+            } else {
+                ProductRepository::update($id, $data);
             }
+
+            $syncQuery = '';
+            if (isset($_POST['sync_now']) && Auth::isAdmin()) {
+                WholesaleStockSyncService::run();
+                $syncQuery = '&synced=1';
+            }
+
+            header('Location: products.php?type_id=' . $typeId . '&' . ($wasCreate ? 'created=1' : 'updated=1') . $syncQuery);
             exit;
         } catch (\RuntimeException $e) {
             $errors[] = $e->getMessage();
@@ -213,6 +221,15 @@ require __DIR__ . '/../partials/layout-start.php';
                 </label>
                 <small class="hint">Draft-producten met 0 of lage voorraad verschijnen niet automatisch in de bestellijst; alleen via het aparte draft-filter of een expliciete "te bestellen".</small>
             </div>
+            <?php if (Auth::isAdmin()): ?>
+                <div class="field" style="margin-top: 10px;">
+                    <label>
+                        <input type="checkbox" id="sync_now" name="sync_now" value="1">
+                        Voorraad direct synchroniseren naar Faire/Orderchamp na opslaan
+                    </label>
+                    <small class="hint">Schrijft bij het opslaan meteen alle afwijkende voorraad terug naar de platformen (niet alleen dit product) - zelfde actie als de knop op de SKU-vergelijkingspagina.</small>
+                </div>
+            <?php endif; ?>
         </fieldset>
 
         <fieldset>

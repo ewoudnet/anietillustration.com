@@ -16,6 +16,12 @@ namespace App;
  * de aanroeper $deductStock=true meegeeft - de historische import (fase B)
  * geeft dit bewust NOOIT mee, want die orders zijn al lang fysiek verwerkt en
  * zouden de voorraad ten onrechte verlagen. Zie docs/wholesale.md.
+ *
+ * Roept zelf NOOIT fase D (WholesaleStockSyncService, outbound naar Faire/
+ * Orderchamp) aan - dat blijft de verantwoordelijkheid van de aanroepende
+ * entry-points (cron-faire.php/webhook-orderchamp.php), die daarvoor de
+ * `stockChanged`-vlag in de return-waarde gebruiken. Zo blijft fase D/E dezelfde
+ * scheiding houden als fase C/D al hadden.
  */
 final class WholesaleOrderImporter
 {
@@ -52,7 +58,7 @@ final class WholesaleOrderImporter
     ];
 
     /**
-     * @return array{imported: int, unmatchedSkus: array<int, string>, nextCursor: ?string, done: bool}
+     * @return array{imported: int, unmatchedSkus: array<int, string>, nextCursor: ?string, done: bool, stockChanged: bool}
      */
     public static function importFairePage(?string $cursor, ?string $createdAtMin, bool $deductStock = false): array
     {
@@ -63,11 +69,14 @@ final class WholesaleOrderImporter
 
         $page = FaireService::fetchOrdersPage($cursor, $createdAtMin);
         $unmatchedSkus = [];
+        $stockChanged = false;
         $retailerCache = [];
 
         foreach ($page['orders'] as $raw) {
             $normalized = self::normalizeFaireOrder($raw, $retailerCache);
-            $unmatchedSkus = array_merge($unmatchedSkus, self::persist((int) $platform['id'], $normalized, $deductStock));
+            $persisted = self::persist((int) $platform['id'], $normalized, $deductStock);
+            $unmatchedSkus = array_merge($unmatchedSkus, $persisted['unmatchedSkus']);
+            $stockChanged = $stockChanged || $persisted['stockChanged'];
         }
 
         return [
@@ -75,11 +84,12 @@ final class WholesaleOrderImporter
             'unmatchedSkus' => array_values(array_unique($unmatchedSkus)),
             'nextCursor' => $page['cursor'],
             'done' => $page['orders'] === [] || $page['cursor'] === null,
+            'stockChanged' => $stockChanged,
         ];
     }
 
     /**
-     * @return array{imported: int, unmatchedSkus: array<int, string>, nextCursor: ?string, done: bool}
+     * @return array{imported: int, unmatchedSkus: array<int, string>, nextCursor: ?string, done: bool, stockChanged: bool}
      */
     public static function importOrderchampPage(?string $cursor, ?string $since, bool $deductStock = false): array
     {
@@ -90,10 +100,13 @@ final class WholesaleOrderImporter
 
         $page = OrderchampService::fetchOrdersPage($cursor, $since);
         $unmatchedSkus = [];
+        $stockChanged = false;
 
         foreach ($page['orders'] as $raw) {
             $normalized = self::normalizeOrderchampOrder($raw);
-            $unmatchedSkus = array_merge($unmatchedSkus, self::persist((int) $platform['id'], $normalized, $deductStock));
+            $persisted = self::persist((int) $platform['id'], $normalized, $deductStock);
+            $unmatchedSkus = array_merge($unmatchedSkus, $persisted['unmatchedSkus']);
+            $stockChanged = $stockChanged || $persisted['stockChanged'];
         }
 
         return [
@@ -101,6 +114,7 @@ final class WholesaleOrderImporter
             'unmatchedSkus' => array_values(array_unique($unmatchedSkus)),
             'nextCursor' => $page['cursor'],
             'done' => !$page['hasNextPage'],
+            'stockChanged' => $stockChanged,
         ];
     }
 
@@ -111,7 +125,7 @@ final class WholesaleOrderImporter
      * met voorraadaftrek, want dit pad bestaat per definitie alleen voor
      * live, nieuwe/gewijzigde orders - nooit voor historische import.
      *
-     * @return array<int, string> onopgeloste SKU's uit deze order
+     * @return array{unmatchedSkus: array<int, string>, stockChanged: bool}
      */
     public static function importOrderchampOrderById(string $orderchampOrderId): array
     {
@@ -248,7 +262,7 @@ final class WholesaleOrderImporter
 
     /**
      * @param array<string, mixed> $normalized
-     * @return array<int, string> SKU's uit deze order die niet gematcht konden worden
+     * @return array{unmatchedSkus: array<int, string>, stockChanged: bool}
      */
     private static function persist(int $platformId, array $normalized, bool $deductStock = false): array
     {
@@ -299,8 +313,9 @@ final class WholesaleOrderImporter
 
         WholesaleOrderRepository::replaceItems($orderId, $items);
 
+        $stockChanged = false;
         if ($deductStock) {
-            WholesaleStockDeductionService::reconcile(
+            $stockChanged = WholesaleStockDeductionService::reconcile(
                 $orderId,
                 $previousStockDeductedAt,
                 $normalized['status'],
@@ -309,7 +324,7 @@ final class WholesaleOrderImporter
             );
         }
 
-        return $unmatchedSkus;
+        return ['unmatchedSkus' => $unmatchedSkus, 'stockChanged' => $stockChanged];
     }
 
     private static function toMysqlDateTime(?string $iso8601): ?string

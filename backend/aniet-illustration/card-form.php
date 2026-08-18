@@ -9,6 +9,7 @@ use App\CardRepository;
 use App\Csrf;
 use App\ImageUpload;
 use App\SalesChannelRepository;
+use App\WholesaleStockSyncService;
 
 Auth::requireSection('aniet-illustration');
 
@@ -194,13 +195,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'wholesale_draft' => $wholesaleSelected ? $values['wholesale_draft'] : 0,
         ];
 
-        if ($id !== null) {
-            CardRepository::update($id, $data, $selectedChannelIds);
-            header('Location: cards.php?updated=1');
-        } else {
+        $wasCreate = $id === null;
+        if ($wasCreate) {
             $id = CardRepository::create($data, $selectedChannelIds);
-            header('Location: cards.php?created=1');
+        } else {
+            CardRepository::update($id, $data, $selectedChannelIds);
         }
+
+        $syncQuery = '';
+        if (isset($_POST['sync_now']) && Auth::isAdmin()) {
+            WholesaleStockSyncService::run();
+            $syncQuery = '&synced=1';
+        }
+
+        header('Location: cards.php?' . ($wasCreate ? 'created=1' : 'updated=1') . $syncQuery);
         exit;
     }
 }
@@ -353,6 +361,15 @@ require __DIR__ . '/../partials/layout-start.php';
                     <small class="hint">Kan ook direct op de bestelpagina aangepast worden.</small>
                 </div>
             </div>
+            <?php if (Auth::isAdmin()): ?>
+                <div class="field" style="margin-top: 10px;">
+                    <label>
+                        <input type="checkbox" id="sync_now" name="sync_now" value="1">
+                        Voorraad direct synchroniseren naar Faire/Orderchamp na opslaan
+                    </label>
+                    <small class="hint">Schrijft bij het opslaan meteen alle afwijkende voorraad terug naar de platformen (niet alleen deze kaart) - zelfde actie als de knop op de SKU-vergelijkingspagina.</small>
+                </div>
+            <?php endif; ?>
         </fieldset>
 
         <fieldset>

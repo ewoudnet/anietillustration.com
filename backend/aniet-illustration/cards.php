@@ -73,6 +73,9 @@ require __DIR__ . '/../partials/layout-start.php';
 <?php elseif (isset($_GET['deleted'])): ?>
     <div class="alert alert-success">Kaart is verwijderd.</div>
 <?php endif; ?>
+<?php if (isset($_GET['synced'])): ?>
+    <div class="alert alert-success">Voorraad gesynchroniseerd naar Faire/Orderchamp - bekijk het resultaat in de <a href="../wholesale/sync-log.php">synchronisatielog</a>.</div>
+<?php endif; ?>
 
 <div class="card" style="padding: 18px 22px; margin-bottom: 20px;">
     <form method="get" action="cards.php">

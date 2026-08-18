@@ -21,6 +21,7 @@ require __DIR__ . '/../bootstrap.php';
 
 use App\Config;
 use App\WholesaleOrderImporter;
+use App\WholesaleStockSyncService;
 
 header('Content-Type: application/json');
 
@@ -51,9 +52,16 @@ if (!is_string($orderId) || $orderId === '') {
 }
 
 try {
-    $unmatchedSkus = WholesaleOrderImporter::importOrderchampOrderById($orderId);
+    $result = WholesaleOrderImporter::importOrderchampOrderById($orderId);
 
-    echo json_encode(['status' => 'ok', 'unmatchedSkus' => $unmatchedSkus]);
+    // Fase D: de eigen (net afgeschreven) voorraad terugschrijven naar
+    // Faire/Orderchamp - alleen als deze order daadwerkelijk voorraad heeft
+    // aangepast.
+    if ($result['stockChanged']) {
+        WholesaleStockSyncService::run();
+    }
+
+    echo json_encode(['status' => 'ok', 'unmatchedSkus' => $result['unmatchedSkus']]);
 } catch (\RuntimeException $e) {
     error_log('webhook-orderchamp.php: ' . $e->getMessage());
     http_response_code(500);

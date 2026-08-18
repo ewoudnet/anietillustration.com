@@ -21,6 +21,7 @@ use App\Config;
 use App\FaireService;
 use App\WholesaleOrderImporter;
 use App\WholesalePlatformRepository;
+use App\WholesaleStockSyncService;
 
 header('Content-Type: application/json');
 
@@ -73,6 +74,7 @@ $createdAtMin = ($stored === null || $stored > $now)
 
 $imported = 0;
 $unmatchedSkus = [];
+$stockChanged = false;
 $cursor = null;
 
 try {
@@ -80,6 +82,7 @@ try {
         $page = WholesaleOrderImporter::importFairePage($cursor, $createdAtMin->format('Y-m-d\TH:i:s\Z'), true);
         $imported += $page['imported'];
         $unmatchedSkus = array_merge($unmatchedSkus, $page['unmatchedSkus']);
+        $stockChanged = $stockChanged || $page['stockChanged'];
         $cursor = $page['nextCursor'];
     } while (!$page['done']);
 
@@ -90,6 +93,14 @@ try {
         (int) $platform['id'],
         $runStartedAt->format('Y-m-d H:i:s')
     );
+
+    // Fase D: pas nu de eigen (net afgeschreven) voorraad terugschrijven naar
+    // Faire/Orderchamp - alleen als deze run daadwerkelijk voorraad heeft
+    // aangepast, anders levert WholesaleStockSyncService::run() sowieso geen
+    // discrepanties op maar is de aanroep nodeloos.
+    if ($stockChanged) {
+        WholesaleStockSyncService::run();
+    }
 
     echo json_encode([
         'status' => 'ok',

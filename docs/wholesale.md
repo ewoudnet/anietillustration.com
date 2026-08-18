@@ -130,6 +130,32 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
   getest** - dat zou een echte voorraadwijziging op de live listings
   betekenen. Zie "Getest" en de beslissing hieronder voor waarom dat een
   bewuste, aparte stap blijft i.p.v. hier al uitgevoerd.
+  - **Fix (2026-08-18):** fase D werd tot nu toe uitsluitend handmatig
+    getriggerd (de knop op `sku-comparison.php`) - een nieuwe Faire/Orderchamp-
+    order deed via fase E wél de eigen voorraad aanpassen, maar schreef dat
+    nooit terug naar het andere platform. `WholesaleStockDeductionService::
+    reconcile()` geeft nu een `bool` terug (heeft deze order de voorraad echt
+    aangepast?), die via `WholesaleOrderImporter::persist()` en
+    `importFairePage()/importOrderchampOrderById()` als `stockChanged`
+    doorgegeven wordt. `cron-faire.php` (na de hele do-while-paginalus) en
+    `webhook-orderchamp.php` roepen daarna zelf `WholesaleStockSyncService::
+    run()` aan als er iets veranderd is - dezelfde functie als de handmatige
+    knop, dus zolang `sync_enabled=0` blijft (nu voor beide platformen) is dit
+    nog steeds alleen een proefdraai (dry-run-logregel), geen echte API-call.
+    `WholesaleOrderImporter` roept fase D bewust niet zelf aan - dat blijft bij
+    de entry-points, zodat fase D/E dezelfde scheiding houden als C/D al
+    hadden.
+  - **Uitbreiding (2026-08-18):** een handmatige voorraadcorrectie via
+    `product-form.php`/`card-form.php` (rechtstreeks `current_stock` wijzigen)
+    triggerde nooit een sync, zelfs niet met de fix hierboven - dat pad gaat
+    niet via `WholesaleOrderImporter`. Beide formulieren hebben nu een
+    (alleen-admin) checkbox "Voorraad direct synchroniseren naar Faire/
+    Orderchamp na opslaan" die na het opslaan gewoon `WholesaleStockSyncService::
+    run()` aanroept - dezelfde functie als de knop op `sku-comparison.php`, dus
+    ook hier weer alle afwijkende SKU's tegelijk (niet alleen het net bewerkte
+    item), en nog steeds een proefdraai zolang `sync_enabled=0` staat.
+    `products.php`/`cards.php` tonen daarna een korte bevestiging met een link
+    naar `sync-log.php` voor het detail per platform.
 - [x] **Fase E (+ F samengevoegd):** live nieuwe-order-detectie +
   voorraadaftrek, én annulering + voorraad-terugboeking - zie de beslissing
   hieronder over waarom die twee niet los te bouwen waren.
