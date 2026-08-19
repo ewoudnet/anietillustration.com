@@ -27,6 +27,21 @@ Faire+Orderchamp-synchronisatie die hier bovenop gebouwd wordt.
   producttype — zelfde types/producten als op Faire)
 - [ ] Mogelijke koppeling met geïmporteerde Faire-data, zodat producten niet
   dubbel onderhouden worden
+- [x] Catalogus-PDF (2026-08-19): `backend/aniet-illustration/catalog.php`
+  (kies producttypes + optioneel drafts) en `catalog-pdf.php` (download,
+  geen e-mailoptie — gebruiker verstuurt de PDF zelf), opbouw in
+  `src/CatalogPdfBuilder.php`. Thumb+sku+titel+leeg aantal-veld per
+  product, gegroepeerd per producttype. Draft-producten (Wholesale
+  Draft-vlag) staan er standaard niet in. Thumbnails worden serverside
+  verkleind/gecomprimeerd (JPEG, "as is" aspect ratio i.p.v. vierkante
+  crop) - zonder dat werd een catalogus met veel producten tientallen MB's
+  groot.
+  **Let op:** dompdf's SVG-ondersteuning trekt via `sabberworm/php-css-parser`
+  boven v9.3 het package `thecodingmachine/safe` mee (duizenden losse
+  bestanden), wat de FTP-deploy naar aniet.nl liet vastlopen/mislukken op
+  2026-08-19. `composer.json` pint daarom expliciet
+  `sabberworm/php-css-parser` op `8.9.0` - niet zomaar loslaten bij een
+  toekomstige `composer update`.
 
 ## Beslissingen & rationale
 - **Beslissing:** nog te onderzoeken of/hoe volledige Faire-productdata (niet
