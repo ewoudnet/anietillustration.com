@@ -27,12 +27,6 @@ Faire+Orderchamp-synchronisatie die hier bovenop gebouwd wordt.
   producttype — zelfde types/producten als op Faire)
 - [ ] Mogelijke koppeling met geïmporteerde Faire-data, zodat producten niet
   dubbel onderhouden worden
-- [x] Catalogus-PDF (2026-08-19): `backend/aniet-illustration/catalog.php`
-  (kies producttypes + optioneel drafts) en `catalog-pdf.php` (genereert de
-  PDF, thumb+sku+titel+leeg aantal-veld per product, gegroepeerd per
-  producttype). Bedoeld voor B2B-klanten die niet via Faire bestellen: zij
-  vullen de PDF in en sturen hem terug, factuur wordt handmatig opgemaakt.
-  Draft-producten (Wholesale Draft-vlag) staan er standaard niet in.
 
 ## Beslissingen & rationale
 - **Beslissing:** nog te onderzoeken of/hoe volledige Faire-productdata (niet
