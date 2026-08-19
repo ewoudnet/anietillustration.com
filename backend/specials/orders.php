@@ -36,6 +36,10 @@ $paidOrders = array_filter($orders, static fn (array $o) => $o['status'] === 'pa
 $paidCount = count($paidOrders);
 $paidRevenueCents = array_sum(array_map(static fn (array $o) => (int) $o['total_amount_cents'], $paidOrders));
 
+$paidAdventOrders = array_filter($adventOrders, static fn (array $o) => $o['status'] === 'paid');
+$paidCalendarQuantity = array_sum(array_map(static fn (array $o) => (int) $o['quantity'], $paidOrders))
+    + array_sum(array_map(static fn (array $o) => (int) $o['quantity'], $paidAdventOrders));
+
 $statusLabels = [
     'open' => 'Open',
     'paid' => 'Betaald',
@@ -162,6 +166,10 @@ require __DIR__ . '/../partials/layout-start.php';
     <div class="card" style="flex: 1 1 160px; text-align: center;">
         <div style="font-size: 1.5rem; font-weight: 700;">€ <?= h(number_format($paidRevenueCents / 100, 2, ',', '.')) ?></div>
         <div>Omzet (betaald, getoond)</div>
+    </div>
+    <div class="card" style="flex: 1 1 160px; text-align: center;">
+        <div style="font-size: 1.5rem; font-weight: 700;"><?= $paidCalendarQuantity ?></div>
+        <div>Aantal kalenders besteld (betaald, nieuw + oud)</div>
     </div>
 </div>
 
