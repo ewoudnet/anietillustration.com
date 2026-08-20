@@ -69,7 +69,6 @@ $sectionEntryPages = [
             <a href="<?= h(BACKEND_BASE) ?>/aniet-illustration/product-form.php?type_id=<?= $activeProductType ?>" class="<?= $activePage === 'product-form' ? 'active' : '' ?>">+ Toevoegen</a>
             <a href="<?= h(BACKEND_BASE) ?>/aniet-illustration/product-order.php?type_id=<?= $activeProductType ?>" class="<?= $activePage === 'product-order' ? 'active' : '' ?>">Bestelpagina</a>
         <?php endif; ?>
-        <a href="<?= h(BACKEND_BASE) ?>/aniet-illustration/catalog.php" class="<?= $activePage === 'catalog' ? 'active' : '' ?>">📄 Catalogus downloaden</a>
     </nav>
 <?php elseif ($activeSection === 'settings'): ?>
     <nav class="subnav">
@@ -78,6 +77,7 @@ $sectionEntryPages = [
         <a href="<?= h(BACKEND_BASE) ?>/settings/sales-channels.php" class="<?= $activePage === 'sales-channels' ? 'active' : '' ?>">Sale channels</a>
         <a href="<?= h(BACKEND_BASE) ?>/settings/backup.php" class="<?= $activePage === 'backup' ? 'active' : '' ?>">Backup</a>
         <a href="<?= h(BACKEND_BASE) ?>/settings/faire-sync.php" class="<?= $activePage === 'faire-sync' ? 'active' : '' ?>">Faire sync</a>
+        <a href="<?= h(BACKEND_BASE) ?>/settings/catalog.php" class="<?= $activePage === 'catalog' ? 'active' : '' ?>">📄 Catalogus downloaden</a>
     </nav>
 <?php elseif ($activeSection === 'specials'): ?>
     <nav class="subnav">

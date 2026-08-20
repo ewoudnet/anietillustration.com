@@ -7,7 +7,7 @@ require __DIR__ . '/../bootstrap.php';
 use App\Auth;
 use App\CatalogPdfBuilder;
 
-Auth::requireSection('aniet-illustration');
+Auth::requireAdmin();
 
 $includeDraft = ($_GET['include_draft'] ?? '') === '1';
 $typeValues = array_map('strval', (array) ($_GET['types'] ?? []));

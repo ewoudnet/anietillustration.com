@@ -7,10 +7,9 @@ require __DIR__ . '/../bootstrap.php';
 use App\Auth;
 use App\ProductTypeRepository;
 
-Auth::requireSection('aniet-illustration');
+Auth::requireAdmin();
 
-$activeSection = 'aniet-illustration';
-$activeProductType = null;
+$activeSection = 'settings';
 $activePage = 'catalog';
 
 $productTypes = ProductTypeRepository::findAll();

@@ -27,7 +27,8 @@ Faire+Orderchamp-synchronisatie die hier bovenop gebouwd wordt.
   producttype — zelfde types/producten als op Faire)
 - [ ] Mogelijke koppeling met geïmporteerde Faire-data, zodat producten niet
   dubbel onderhouden worden
-- [x] Catalogus-PDF (2026-08-19): `backend/aniet-illustration/catalog.php`
+- [x] Catalogus-PDF (2026-08-19, verplaatst naar Settings op 2026-08-20 -
+  wordt niet vaak gebruikt): `backend/settings/catalog.php`
   (kies producttypes + optioneel drafts) en `catalog-pdf.php` (download,
   geen e-mailoptie — gebruiker verstuurt de PDF zelf), opbouw in
   `src/CatalogPdfBuilder.php`. Thumb+sku+titel+leeg aantal-veld per
