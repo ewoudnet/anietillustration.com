@@ -31,6 +31,20 @@ $widthMm = max(15, min(150, $widthMm));
 $heightMm = max(15, min(150, $heightMm));
 
 $generatedAt = (new DateTime())->format('d-m-Y H:i');
+
+/**
+ * Labels zijn soms maar 2cm breed en sku's kunnen tot 8 cijfers lang zijn,
+ * dus de tekstgrootte moet meekrimpen met zowel labelbreedte als sku-lengte.
+ */
+function labelSkuFontSizeMm(int $widthMm, int $skuLength): float
+{
+    $availableMm = max(1, $widthMm - 2);
+    $skuLength = max(1, $skuLength);
+    $fontSizeMm = $availableMm / ($skuLength * 0.62);
+
+    return max(1.6, min(4.5, $fontSizeMm));
+}
+
 ?>
 <!doctype html>
 <html lang="nl">
@@ -66,7 +80,7 @@ $generatedAt = (new DateTime())->format('d-m-Y H:i');
             height: <?= $heightMm ?>mm;
             background: #f2f2f2;
         }
-        .label-cell .sku { font-weight: 700; font-size: 1.2rem; margin-top: 1mm; }
+        .label-cell .sku { font-weight: 700; margin-top: 1mm; white-space: nowrap; overflow: hidden; }
         @media print {
             .print-actions, .label-settings { display: none; }
             body { padding: 0; }
@@ -112,7 +126,7 @@ $generatedAt = (new DateTime())->format('d-m-Y H:i');
                 <?php else: ?>
                     <div class="thumb-placeholder"></div>
                 <?php endif; ?>
-                <div class="sku"><?= h($cardRow['sku']) ?></div>
+                <div class="sku" style="font-size: <?= labelSkuFontSizeMm($widthMm, strlen((string) $cardRow['sku'])) ?>mm;"><?= h($cardRow['sku']) ?></div>
             </div>
         <?php endforeach; ?>
     </div>
