@@ -142,11 +142,17 @@ patroon als specials) — deel 1 gebruikt bewust een eigen tabelset
     voorraad" en "Te bestellen" blijven staan.
   - `backend/settings/faire-sync.php` (de oude, losstaande eenrichtingstool)
     stond al uitgezet sinds het corruptie-incident, ongewijzigd gelaten.
+  - De menuknop "Faire sync" in de Settings-subnav
+    (`backend/partials/nav-topbar.php`) is op 2026-08-20 op gebruikersverzoek
+    ook verwijderd (zelfde aanpak als de Wholesale-sectieknop hierboven) -
+    de pagina/code blijft intact, rechtstreeks naar `faire-sync.php`
+    navigeren werkt nog gewoon.
   - **Terugzetten:** zet `WHOLESALE_SYNC_PAUSED` op `false` in
     `backend/bootstrap.php` - dat zet de cron/webhook/import/sku-comparison/
-    formulier-checkbox-guards in één keer weer aan. De menuknop en de
-    voorraadkolom moeten er apart weer bij (ze zijn bewust niet aan deze
-    constante gekoppeld, want dat zijn UI-keuzes, geen sync-aanroepen).
+    formulier-checkbox-guards in één keer weer aan. De menuknoppen
+    (Wholesale-sectie + Faire sync) en de voorraadkolom moeten er apart weer
+    bij (ze zijn bewust niet aan deze constante gekoppeld, want dat zijn
+    UI-keuzes, geen sync-aanroepen).
 - [x] **Fase A (skelet):** datamodel, backend-sectie + navigatie, alle
   pagina's draaien tegen de echte (nog lege) tabellen.
 - [x] **Fase B (historische import):** `backend/wholesale/import.php` haalt

@@ -76,7 +76,9 @@ $sectionEntryPages = [
         <a href="<?= h(BACKEND_BASE) ?>/settings/product-types.php" class="<?= $activePage === 'product-types' ? 'active' : '' ?>">Producttypes</a>
         <a href="<?= h(BACKEND_BASE) ?>/settings/sales-channels.php" class="<?= $activePage === 'sales-channels' ? 'active' : '' ?>">Sale channels</a>
         <a href="<?= h(BACKEND_BASE) ?>/settings/backup.php" class="<?= $activePage === 'backup' ? 'active' : '' ?>">Backup</a>
-        <a href="<?= h(BACKEND_BASE) ?>/settings/faire-sync.php" class="<?= $activePage === 'faire-sync' ? 'active' : '' ?>">Faire sync</a>
+        <?php /* 'Faire sync' hier bewust weggelaten (2026-08-20, gebruikersverzoek, zelfde
+        aanpak als de Wholesale-menuknop hierboven): de pagina en code blijven intact, alleen
+        de menuknop is tijdelijk weg. Rechtstreeks naar faire-sync.php navigeren werkt nog gewoon. */ ?>
         <a href="<?= h(BACKEND_BASE) ?>/settings/catalog.php" class="<?= $activePage === 'catalog' ? 'active' : '' ?>">📄 Catalogus downloaden</a>
     </nav>
 <?php elseif ($activeSection === 'specials'): ?>
