@@ -31,6 +31,9 @@ require __DIR__ . '/../partials/layout-start.php';
         leeg invulveld voor het gewenste aantal. Bedoeld om naar B2B-klanten te
         sturen die niet via Faire bestellen: zij vullen de PDF in en sturen hem
         terug, waarna de factuur handmatig opgemaakt wordt.</p>
+    <p><small class="hint">Bij Kaarten komen alleen kaarten in de catalogus die aan de
+        Wholesale-verkoopkanaal gekoppeld zijn - kaarten die uitsluitend bij Greetz,
+        Kaartje2Go, Thortful of Redbubble verkocht worden blijven erbuiten.</small></p>
 
     <form method="get" action="catalog-pdf.php">
         <div class="field">

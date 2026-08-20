@@ -111,6 +111,33 @@ final class CardRepository
     }
 
     /**
+     * Alleen kaarten gekoppeld aan de "Wholesale"-sales-channel, voor de klant-catalogus
+     * (backend/aniet-illustration/catalog.php) - kaarten die uitsluitend bij Greetz/
+     * Kaartje2Go/Thortful/Redbubble verkocht worden horen niet in een catalogus die naar
+     * B2B-klanten gaat.
+     *
+     * @param bool|null $draftOnly null = alle, true = alleen Wholesale Draft, false = Wholesale Draft uitsluiten.
+     * @return array<int, array<string, mixed>>
+     */
+    public static function findWholesaleForCatalog(?bool $draftOnly): array
+    {
+        $where = "WHERE c.id IN (
+            SELECT csc.card_id FROM card_sales_channels csc
+            INNER JOIN sales_channels sc ON sc.id = csc.sales_channel_id
+            WHERE sc.name = 'Wholesale'
+        )";
+        $types = '';
+        $params = [];
+        if ($draftOnly !== null) {
+            $where .= ' AND c.wholesale_draft = ?';
+            $types .= 'i';
+            $params[] = $draftOnly ? 1 : 0;
+        }
+
+        return Database::fetchAll("SELECT c.* FROM cards c {$where} ORDER BY c.title ASC", $types, $params);
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     public static function find(int $id): ?array

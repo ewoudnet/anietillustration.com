@@ -42,8 +42,12 @@ final class CatalogPdfBuilder
                 continue;
             }
 
+            // Generieke producten (niet-Kaarten) worden nu al uitsluitend via Wholesale
+            // verkocht (zie ProductRepository), dus die hoeven niet gefilterd te worden.
+            // Kaarten wel: die kunnen ook (uitsluitend) bij Greetz/Kaartje2Go/Thortful/
+            // Redbubble verkocht worden en horen dan niet in deze B2B-catalogus.
             $items = $isCards
-                ? CardRepository::findAllForOrderPage(self::MAX_ITEMS_PER_TYPE, 0, 'title', 'asc', $draftOnly)
+                ? CardRepository::findWholesaleForCatalog($draftOnly)
                 : ProductRepository::findAllForOrderPage((int) $productType['id'], self::MAX_ITEMS_PER_TYPE, 0, 'title', 'asc', $draftOnly);
 
             if ($items === []) {

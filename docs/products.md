@@ -32,7 +32,13 @@ Faire+Orderchamp-synchronisatie die hier bovenop gebouwd wordt.
   geen e-mailoptie — gebruiker verstuurt de PDF zelf), opbouw in
   `src/CatalogPdfBuilder.php`. Thumb+sku+titel+leeg aantal-veld per
   product, gegroepeerd per producttype. Draft-producten (Wholesale
-  Draft-vlag) staan er standaard niet in. Thumbnails worden serverside
+  Draft-vlag) staan er standaard niet in. Bij Kaarten komen alleen kaarten
+  gekoppeld aan de Wholesale-sales-channel mee (`CardRepository::
+  findWholesaleForCatalog()`) - kaarten die uitsluitend bij Greetz/
+  Kaartje2Go/Thortful/Redbubble verkocht worden horen niet in een
+  B2B-catalogus. Generieke producten (niet-Kaarten) hebben geen
+  verkoopkanaal-koppeling en zijn sowieso altijd Wholesale-only, dus die
+  hoeven niet gefilterd te worden. Thumbnails worden serverside
   verkleind/gecomprimeerd (JPEG, "as is" aspect ratio i.p.v. vierkante
   crop) - zonder dat werd een catalogus met veel producten tientallen MB's
   groot.
