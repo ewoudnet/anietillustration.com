@@ -109,62 +109,70 @@ final class ProductRepository
         int $offset,
         string $sortColumn = 'title',
         string $direction = 'asc',
-        ?bool $draftOnly = null
+        ?bool $draftOnly = null,
+        string $q = ''
     ): array {
         if (!in_array($sortColumn, self::ORDER_PAGE_SORT_COLUMNS, true)) {
             $sortColumn = 'title';
         }
         $direction = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
 
-        $draftClause = '';
-        $types = 'i';
-        $params = [$productTypeId];
-        if ($draftOnly !== null) {
-            $draftClause = ' AND wholesale_draft = ?';
-            $types .= 'i';
-            $params[] = $draftOnly ? 1 : 0;
-        }
+        [$where, $types, $params] = self::buildOrderPageWhereClause($productTypeId, $draftOnly, $q);
         $types .= 'ii';
         $params[] = $limit;
         $params[] = $offset;
 
         return Database::fetchAll(
-            "SELECT * FROM products WHERE product_type_id = ? {$draftClause} ORDER BY {$sortColumn} {$direction}, title ASC LIMIT ? OFFSET ?",
+            "SELECT * FROM products {$where} ORDER BY {$sortColumn} {$direction}, title ASC LIMIT ? OFFSET ?",
             $types,
             $params
         );
     }
 
-    public static function countAll(int $productTypeId, ?bool $draftOnly = null): int
+    public static function countAll(int $productTypeId, ?bool $draftOnly = null, string $q = ''): int
     {
-        $draftClause = '';
-        $types = 'i';
-        $params = [$productTypeId];
-        if ($draftOnly !== null) {
-            $draftClause = ' AND wholesale_draft = ?';
-            $types .= 'i';
-            $params[] = $draftOnly ? 1 : 0;
-        }
-
-        $row = Database::fetchOne(
-            "SELECT COUNT(*) AS total FROM products WHERE product_type_id = ? {$draftClause}",
-            $types,
-            $params
-        );
+        [$where, $types, $params] = self::buildOrderPageWhereClause($productTypeId, $draftOnly, $q);
+        $row = Database::fetchOne("SELECT COUNT(*) AS total FROM products {$where}", $types, $params);
 
         return (int) ($row['total'] ?? 0);
     }
 
     /**
+     * @return array{0: string, 1: string, 2: array<int, mixed>}
+     */
+    private static function buildOrderPageWhereClause(int $productTypeId, ?bool $draftOnly, string $q): array
+    {
+        $conditions = ['product_type_id = ?'];
+        $types = 'i';
+        $params = [$productTypeId];
+
+        if ($draftOnly !== null) {
+            $conditions[] = 'wholesale_draft = ?';
+            $types .= 'i';
+            $params[] = $draftOnly ? 1 : 0;
+        }
+
+        $q = trim($q);
+        if ($q !== '') {
+            $conditions[] = 'sku LIKE ?';
+            $types .= 's';
+            $params[] = '%' . $q . '%';
+        }
+
+        return ['WHERE ' . implode(' AND ', $conditions), $types, $params];
+    }
+
+    /**
+     * Producten die nu handmatig op "te bestellen" gezet zijn. Geen automatische
+     * voorraad-gebaseerde selectie meer (min./huidige voorraad) - de gebruiker bepaalt
+     * zelf via de productenlijst hieronder wat er besteld moet worden.
+     *
      * @return array<int, array<string, mixed>>
      */
     public static function needsOrdering(int $productTypeId): array
     {
         return Database::fetchAll(
-            'SELECT * FROM products
-             WHERE product_type_id = ?
-               AND (to_order > 0 OR (current_stock IS NOT NULL AND current_stock < min_stock AND wholesale_draft = 0))
-             ORDER BY title ASC',
+            'SELECT * FROM products WHERE product_type_id = ? AND to_order > 0 ORDER BY title ASC',
             'i',
             [$productTypeId]
         );
@@ -267,6 +275,15 @@ final class ProductRepository
     public static function updateToOrder(int $id, int $toOrder): void
     {
         Database::run('UPDATE products SET to_order = ? WHERE id = ?', 'ii', [$toOrder, $id]);
+    }
+
+    public static function clearAllToOrder(int $productTypeId): void
+    {
+        Database::run(
+            'UPDATE products SET to_order = 0 WHERE product_type_id = ? AND to_order > 0',
+            'i',
+            [$productTypeId]
+        );
     }
 
     /**

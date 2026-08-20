@@ -50,12 +50,9 @@ if ($card === null) {
 $toOrder = (int) $toOrderRaw;
 CardRepository::updateToOrder($cardId, $toOrder);
 
-// Zelfde regel als CardRepository::needsOrdering(): Wholesale Draft-kaarten verschijnen
-// niet automatisch op basis van lage voorraad, alleen via een expliciete te-bestellen.
-$needsOrdering = $toOrder > 0
-    || ($card['current_stock'] !== null
-        && (int) $card['current_stock'] < (int) $card['min_stock']
-        && (int) $card['wholesale_draft'] === 0);
+// Zelfde regel als CardRepository::needsOrdering(): alleen handmatig op "te bestellen"
+// gezette kaarten verschijnen in de bestellijst, geen automatische voorraad-selectie.
+$needsOrdering = $toOrder > 0;
 
 echo json_encode([
     'ok' => true,

@@ -52,13 +52,9 @@ if ($product === null || (int) $product['product_type_id'] !== $typeId) {
 $toOrder = (int) $toOrderRaw;
 ProductRepository::updateToOrder($productId, $toOrder);
 
-// Zelfde regel als ProductRepository::needsOrdering(): Wholesale Draft-producten
-// verschijnen niet automatisch op basis van lage voorraad, alleen via een expliciete
-// te-bestellen.
-$needsOrdering = $toOrder > 0
-    || ($product['current_stock'] !== null
-        && (int) $product['current_stock'] < (int) $product['min_stock']
-        && (int) $product['wholesale_draft'] === 0);
+// Zelfde regel als ProductRepository::needsOrdering(): alleen handmatig op "te bestellen"
+// gezette producten verschijnen in de bestellijst, geen automatische voorraad-selectie.
+$needsOrdering = $toOrder > 0;
 
 echo json_encode([
     'ok' => true,

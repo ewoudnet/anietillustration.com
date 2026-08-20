@@ -297,7 +297,7 @@ require __DIR__ . '/../partials/layout-start.php';
                     <input type="checkbox" id="wholesale_draft" name="wholesale_draft" value="1" <?= $values['wholesale_draft'] === 1 ? 'checked' : '' ?>>
                     Wholesale Draft
                 </label>
-                <small class="hint">Draft-kaarten met 0 of lage voorraad verschijnen niet automatisch in de bestellijst; alleen via het aparte draft-filter of een expliciete "te bestellen".</small>
+                <small class="hint">Draft-kaarten verschijnen, net als alle andere kaarten, alleen in de bestellijst via een expliciete "te bestellen" op de bestelpagina - niet automatisch op basis van voorraad.</small>
             </div>
 
             <div id="greetz-section" class="conditional-field" style="margin-top: 16px;">

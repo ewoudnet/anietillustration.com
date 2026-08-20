@@ -219,7 +219,7 @@ require __DIR__ . '/../partials/layout-start.php';
                     <input type="checkbox" id="wholesale_draft" name="wholesale_draft" value="1" <?= $values['wholesale_draft'] === 1 ? 'checked' : '' ?>>
                     Wholesale Draft
                 </label>
-                <small class="hint">Draft-producten met 0 of lage voorraad verschijnen niet automatisch in de bestellijst; alleen via het aparte draft-filter of een expliciete "te bestellen".</small>
+                <small class="hint">Draft-producten verschijnen, net als alle andere producten, alleen in de bestellijst via een expliciete "te bestellen" op de bestelpagina - niet automatisch op basis van voorraad.</small>
             </div>
             <?php if (Auth::isAdmin() && !WHOLESALE_SYNC_PAUSED): ?>
                 <div class="field field-checkbox" style="margin-top: 10px;">

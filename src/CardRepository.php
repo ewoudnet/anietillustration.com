@@ -216,21 +216,15 @@ final class CardRepository
         int $offset,
         string $sortColumn = 'title',
         string $direction = 'asc',
-        ?bool $draftOnly = null
+        ?bool $draftOnly = null,
+        string $q = ''
     ): array {
         if (!in_array($sortColumn, self::ORDER_PAGE_SORT_COLUMNS, true)) {
             $sortColumn = 'title';
         }
         $direction = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
 
-        $where = '';
-        $types = '';
-        $params = [];
-        if ($draftOnly !== null) {
-            $where = 'WHERE wholesale_draft = ?';
-            $types = 'i';
-            $params[] = $draftOnly ? 1 : 0;
-        }
+        [$where, $types, $params] = self::buildOrderPageWhereClause($draftOnly, $q);
         $types .= 'ii';
         $params[] = $limit;
         $params[] = $offset;
@@ -242,36 +236,52 @@ final class CardRepository
         );
     }
 
-    public static function countAll(?bool $draftOnly = null): int
+    public static function countAll(?bool $draftOnly = null, string $q = ''): int
     {
-        if ($draftOnly !== null) {
-            $row = Database::fetchOne(
-                'SELECT COUNT(*) AS total FROM cards WHERE wholesale_draft = ?',
-                'i',
-                [$draftOnly ? 1 : 0]
-            );
-        } else {
-            $row = Database::fetchOne('SELECT COUNT(*) AS total FROM cards');
-        }
+        [$where, $types, $params] = self::buildOrderPageWhereClause($draftOnly, $q);
+        $row = Database::fetchOne("SELECT COUNT(*) AS total FROM cards {$where}", $types, $params);
 
         return (int) ($row['total'] ?? 0);
     }
 
     /**
-     * Kaarten die nu besteld moeten worden: handmatig op "te bestellen" gezet, of
-     * (zodra handmatig bijgehouden) voorraad onder de minimale voorraad - dat laatste
-     * niet voor Wholesale Draft-kaarten, die moeten niet automatisch in de lijst
-     * verschijnen zolang ze nog niet (opnieuw) actief zijn op Wholesale.
+     * @return array{0: string, 1: string, 2: array<int, mixed>}
+     */
+    private static function buildOrderPageWhereClause(?bool $draftOnly, string $q): array
+    {
+        $conditions = [];
+        $types = '';
+        $params = [];
+
+        if ($draftOnly !== null) {
+            $conditions[] = 'wholesale_draft = ?';
+            $types .= 'i';
+            $params[] = $draftOnly ? 1 : 0;
+        }
+
+        $q = trim($q);
+        if ($q !== '') {
+            $conditions[] = 'sku LIKE ?';
+            $types .= 's';
+            $params[] = '%' . $q . '%';
+        }
+
+        $where = $conditions === [] ? '' : 'WHERE ' . implode(' AND ', $conditions);
+
+        return [$where, $types, $params];
+    }
+
+    /**
+     * Kaarten die nu handmatig op "te bestellen" gezet zijn. Geen automatische
+     * voorraad-gebaseerde selectie meer (min./huidige voorraad) - de gebruiker bepaalt
+     * zelf via de kaartenlijst hieronder wat er besteld moet worden.
      *
      * @return array<int, array<string, mixed>>
      */
     public static function needsOrdering(): array
     {
         return Database::fetchAll(
-            'SELECT * FROM cards
-             WHERE to_order > 0
-                OR (current_stock IS NOT NULL AND current_stock < min_stock AND wholesale_draft = 0)
-             ORDER BY title ASC'
+            'SELECT * FROM cards WHERE to_order > 0 ORDER BY title ASC'
         );
     }
 
@@ -409,6 +419,11 @@ final class CardRepository
     public static function updateToOrder(int $id, int $toOrder): void
     {
         Database::run('UPDATE cards SET to_order = ? WHERE id = ?', 'ii', [$toOrder, $id]);
+    }
+
+    public static function clearAllToOrder(): void
+    {
+        Database::run('UPDATE cards SET to_order = 0 WHERE to_order > 0');
     }
 
     /**

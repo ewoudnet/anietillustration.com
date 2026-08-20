@@ -35,12 +35,13 @@ $page = max(1, (int) ($_GET['page'] ?? 1));
 $sort = (string) ($_GET['sort'] ?? 'title');
 $dir = ((string) ($_GET['dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
 $draftOnly = ($_GET['draft'] ?? '') === '1' ? true : null;
-$totalProducts = ProductRepository::countAll($typeId, $draftOnly);
+$q = trim((string) ($_GET['q'] ?? ''));
+$totalProducts = ProductRepository::countAll($typeId, $draftOnly, $q);
 $totalPages = max(1, (int) ceil($totalProducts / GENERIC_PRODUCTS_PER_PAGE));
 $page = min($page, $totalPages);
 
-$allProducts = ProductRepository::findAllForOrderPage($typeId, GENERIC_PRODUCTS_PER_PAGE, ($page - 1) * GENERIC_PRODUCTS_PER_PAGE, $sort, $dir, $draftOnly);
-$orderQueryParams = array_merge(['type_id' => $typeId], $draftOnly === true ? ['draft' => '1'] : []);
+$allProducts = ProductRepository::findAllForOrderPage($typeId, GENERIC_PRODUCTS_PER_PAGE, ($page - 1) * GENERIC_PRODUCTS_PER_PAGE, $sort, $dir, $draftOnly, $q);
+$orderQueryParams = array_merge(['type_id' => $typeId], $draftOnly === true ? ['draft' => '1'] : [], $q !== '' ? ['q' => $q] : []);
 
 $totalToOrder = array_sum(array_map(static fn (array $p): int => (int) $p['to_order'], $needsOrdering));
 $designCount = count($needsOrdering);
@@ -51,6 +52,10 @@ require __DIR__ . '/../partials/layout-start.php';
 <div class="page-header">
     <h1>📦 Bestelpagina - <?= h($productType['name']) ?></h1>
 </div>
+
+<?php if (isset($_GET['cleared'])): ?>
+    <div class="alert alert-success">Bestellijst is geleegd.</div>
+<?php endif; ?>
 
 <div id="needs-ordering-content" style="<?= $needsOrdering === [] ? 'display:none;' : '' ?>">
     <div class="stat-grid">
@@ -67,7 +72,14 @@ require __DIR__ . '/../partials/layout-start.php';
     <div class="card" style="margin-bottom: 20px;">
         <div class="admin-topbar" style="margin-bottom: 12px;">
             <strong>Moet besteld worden</strong>
-            <a href="product-order-print.php?type_id=<?= (int) $typeId ?>" target="_blank" class="btn" style="width: auto; margin-top: 0;">🖨️ Print bestellijst</a>
+            <div style="display: flex; gap: 8px;">
+                <a href="product-order-print.php?type_id=<?= (int) $typeId ?>" target="_blank" class="btn" style="width: auto; margin-top: 0;">🖨️ Print bestellijst</a>
+                <form method="post" action="product-order-clear.php" onsubmit="return confirm('Weet je zeker dat je de hele bestellijst wilt legen? Alle aantallen gaan terug naar 0. Dit kan niet ongedaan worden gemaakt.');">
+                    <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
+                    <input type="hidden" name="type_id" value="<?= (int) $typeId ?>">
+                    <button type="submit" class="btn btn-secondary" style="width: auto; margin-top: 0;">🗑️ Bestellijst legen</button>
+                </form>
+            </div>
         </div>
         <div class="table-wrapper">
             <table class="orders" id="needs-ordering-table">
@@ -111,13 +123,29 @@ require __DIR__ . '/../partials/layout-start.php';
         <input type="hidden" name="type_id" value="<?= (int) $typeId ?>">
         <input type="hidden" name="sort" value="<?= h($sort) ?>">
         <input type="hidden" name="dir" value="<?= h($dir) ?>">
-        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; font-weight: 600;">
-            <input type="checkbox" name="draft" value="1" <?= $draftOnly === true ? 'checked' : '' ?> onchange="this.form.submit()">
-            Alleen Wholesale Draft-producten tonen
-        </label>
+        <div class="row" style="align-items: end;">
+            <div class="field" style="flex: 1 1 220px;">
+                <label for="q">Zoeken op SKU</label>
+                <input type="text" id="q" name="q" placeholder="SKU..." value="<?= h($q) ?>" autocomplete="off">
+            </div>
+            <div class="field" style="flex: 0 0 auto;">
+                <button type="submit" class="btn" style="width: auto; margin-top: 0;">Zoeken</button>
+            </div>
+            <?php if ($q !== ''): ?>
+                <div class="field" style="flex: 0 0 auto;">
+                    <a href="product-order.php?type_id=<?= (int) $typeId ?><?= $draftOnly === true ? '&draft=1' : '' ?>" class="btn btn-secondary" style="width: auto; margin-top: 0;">Wis zoekopdracht</a>
+                </div>
+            <?php endif; ?>
+            <div class="field" style="flex: 0 0 auto;">
+                <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; font-weight: 600; margin-top: 8px;">
+                    <input type="checkbox" name="draft" value="1" <?= $draftOnly === true ? 'checked' : '' ?> onchange="this.form.submit()">
+                    Alleen Wholesale Draft-producten tonen
+                </label>
+            </div>
+        </div>
     </form>
     <?php if ($allProducts === []): ?>
-        <p><?= $draftOnly === true ? 'Geen Wholesale Draft-producten gevonden.' : 'Er zijn nog geen producten toegevoegd.' ?></p>
+        <p><?= $draftOnly === true || $q !== '' ? 'Geen producten gevonden voor deze filters.' : 'Er zijn nog geen producten toegevoegd.' ?></p>
     <?php else: ?>
         <p class="result-count">Totaal: <strong><?= (int) $totalProducts ?></strong> <?= $totalProducts === 1 ? 'product' : 'producten' ?></p>
         <div class="table-wrapper">
@@ -159,7 +187,7 @@ require __DIR__ . '/../partials/layout-start.php';
                 </tbody>
             </table>
         </div>
-        <?= renderPagination($page, $totalPages, array_merge(['type_id' => $typeId, 'sort' => $sort, 'dir' => $dir], $draftOnly === true ? ['draft' => '1'] : []), 'product-order.php') ?>
+        <?= renderPagination($page, $totalPages, array_merge(['sort' => $sort, 'dir' => $dir], $orderQueryParams), 'product-order.php') ?>
     <?php endif; ?>
 </div>
 <script>
