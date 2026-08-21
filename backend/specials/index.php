@@ -87,7 +87,12 @@ require __DIR__ . '/../partials/layout-start.php';
                             <?= $special['ends_at'] ? h((new DateTimeImmutable($special['ends_at']))->format('d-m-Y')) : '—' ?>
                         </td>
                         <td><?= (int) $special['variant_count'] ?></td>
-                        <td><span class="badge <?= $status['class'] ?>"><?= h($status['label']) ?></span></td>
+                        <td>
+                            <span class="badge <?= $status['class'] ?>"><?= h($status['label']) ?></span>
+                            <?php if ((int) $special['sold_out'] === 1): ?>
+                                <span class="badge badge-off">Uitverkocht</span>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <div class="actions-dropdown">
                                 <button type="button" class="icon-btn actions-trigger" title="Acties" aria-label="Acties">⋮</button>
@@ -99,6 +104,12 @@ require __DIR__ . '/../partials/layout-start.php';
                                         <input type="hidden" name="id" value="<?= (int) $special['id'] ?>">
                                         <input type="hidden" name="active" value="<?= (int) $special['active'] === 1 ? '0' : '1' ?>">
                                         <button type="submit"><?= (int) $special['active'] === 1 ? '🔕 Zet uit' : '🔔 Zet aan' ?></button>
+                                    </form>
+                                    <form method="post" action="toggle-sold-out.php">
+                                        <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
+                                        <input type="hidden" name="id" value="<?= (int) $special['id'] ?>">
+                                        <input type="hidden" name="sold_out" value="<?= (int) $special['sold_out'] === 1 ? '0' : '1' ?>">
+                                        <button type="submit"><?= (int) $special['sold_out'] === 1 ? '📦 Weer op voorraad' : '🚫 Zet op uitverkocht' ?></button>
                                     </form>
                                     <form method="post" action="delete.php"
                                           onsubmit="return confirm('Weet je zeker dat je deze special wilt verwijderen? Dit kan niet ongedaan worden gemaakt.');">

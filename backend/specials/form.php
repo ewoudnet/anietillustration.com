@@ -30,6 +30,7 @@ $formData = $special ?? [
     'description' => '',
     'banner_path' => null,
     'active' => 0,
+    'sold_out' => 0,
     'ship_eu' => 1,
     'ship_world' => 0,
     'starts_at' => null,
@@ -64,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formData['slug'] = SpecialRepository::slugify((string) ($_POST['slug'] ?? ''));
     $formData['description'] = trim((string) ($_POST['description'] ?? ''));
     $formData['active'] = isset($_POST['active']) ? 1 : 0;
+    $formData['sold_out'] = isset($_POST['sold_out']) ? 1 : 0;
     $formData['ship_eu'] = isset($_POST['ship_eu']) ? 1 : 0;
     $formData['ship_world'] = isset($_POST['ship_world']) ? 1 : 0;
     $formData['starts_at'] = trim((string) ($_POST['starts_at'] ?? '')) !== '' ? $_POST['starts_at'] . ' 00:00:00' : null;
@@ -165,6 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'description' => $formData['description'] !== '' ? $formData['description'] : null,
             'banner_path' => $bannerPath,
             'active' => (bool) $formData['active'],
+            'sold_out' => (bool) $formData['sold_out'],
             'ship_eu' => (bool) $formData['ship_eu'],
             'ship_world' => (bool) $formData['ship_world'],
             'starts_at' => $formData['starts_at'],
@@ -255,6 +258,13 @@ require __DIR__ . '/../partials/layout-start.php';
             <label>
                 <input type="checkbox" name="active" value="1" <?= !empty($formData['active']) ? 'checked' : '' ?> style="width: auto; margin-right: 6px;">
                 Special is actief (zichtbaar/bestelbaar op de publieke pagina)
+            </label>
+        </div>
+
+        <div class="field">
+            <label>
+                <input type="checkbox" name="sold_out" value="1" <?= !empty($formData['sold_out']) ? 'checked' : '' ?> style="width: auto; margin-right: 6px;">
+                Uitverkocht (special blijft zichtbaar, bestelformulier wordt vervangen door een melding)
             </label>
         </div>
 

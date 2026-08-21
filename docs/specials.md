@@ -14,7 +14,8 @@ lopende specials met daaronder de verlopen specials.
 - Backend: `backend/specials/index.php` (overzicht), `form.php` (aanmaken/
   bewerken), `delete.php`, `toggle-active.php`
 - `src/SpecialRepository.php` — CRUD specials + prijsvarianten,
-  `findPublicActive()`/`findPublicExpired()`/`findOrderable()`
+  `findPublicActive()`/`findPublicExpired()`/`findVisible()` (tonen, ook als
+  uitverkocht)/`findOrderable()` (tonen én bestelbaar, dus niet uitverkocht)
 - `src/ImageUpload.php` — banner-upload (resize via GD), zie
   `docs/backend.md` voor waarom dit naar `specials/assets/uploads/banners/`
   schrijft i.p.v. `backend/assets/`
@@ -42,6 +43,11 @@ lopende specials met daaronder de verlopen specials.
   `<template>`-clone, server-side opnieuw gevalideerd)
 - [x] Status aan/uit-toggle (`active`) + optionele `starts_at`/`ends_at` voor
   automatisch "lopend"/"verlopen"
+- [x] Uitverkocht-vlag (`sold_out`): special blijft publiek zichtbaar (banner/
+  tekst/overzicht), maar het bestelformulier wordt vervangen door een melding
+  en nieuwe orders worden ook server-side geblokkeerd (`findOrderable()`
+  filtert op `sold_out = 0`). Onafhankelijk van `active` te zetten, quick-
+  toggle in het backend-overzicht en checkbox in het bewerkformulier.
 - [x] Directe link vanuit het bewerkformulier naar de publieke special-pagina
 
 ## Statusbepaling (lopend/verlopen/concept)

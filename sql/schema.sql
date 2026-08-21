@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS specials (
     banner_path VARCHAR(255) DEFAULT NULL,
     description TEXT DEFAULT NULL,
     active TINYINT(1) NOT NULL DEFAULT 0,
+    sold_out TINYINT(1) NOT NULL DEFAULT 0,
     ship_eu TINYINT(1) NOT NULL DEFAULT 1,
     ship_world TINYINT(1) NOT NULL DEFAULT 0,
     starts_at DATETIME DEFAULT NULL,

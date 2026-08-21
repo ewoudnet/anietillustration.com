@@ -83,7 +83,10 @@ final class SpecialRepository
     }
 
     /**
-     * Een special die publiek besteld mag worden (actief en binnen de looptijd), met varianten.
+     * Een special die publiek besteld mag worden (actief, binnen de looptijd en niet
+     * uitverkocht), met varianten. Gebruikt voor de server-side check bij het plaatsen
+     * van een order (process-order.php) - blokkeert dus ook directe POSTs als de
+     * special inmiddels op uitverkocht is gezet.
      *
      * @return array<string, mixed>|null
      */
@@ -92,7 +95,7 @@ final class SpecialRepository
         $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->prepare(
             "SELECT * FROM specials
-             WHERE id = ? AND active = 1
+             WHERE id = ? AND active = 1 AND sold_out = 0
                AND (starts_at IS NULL OR starts_at <= NOW())
                AND (ends_at IS NULL OR ends_at >= NOW())
              LIMIT 1"
@@ -108,6 +111,48 @@ final class SpecialRepository
      * @return array<string, mixed>|null
      */
     public function findOrderableBySlug(string $slug): ?array
+    {
+        $pdo = SpecialsDatabase::connection();
+        $stmt = $pdo->prepare(
+            "SELECT * FROM specials
+             WHERE slug = ? AND active = 1 AND sold_out = 0
+               AND (starts_at IS NULL OR starts_at <= NOW())
+               AND (ends_at IS NULL OR ends_at >= NOW())
+             LIMIT 1"
+        );
+        $stmt->execute([$slug]);
+
+        return $this->attachOrderableVariants($stmt->fetch());
+    }
+
+    /**
+     * Een special die publiek zichtbaar is (actief en binnen de looptijd), los van
+     * sold_out - gebruikt om de special-pagina te tonen (banner/tekst), ook als hij
+     * uitverkocht is en het bestelformulier dus niet getoond mag worden.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findVisible(int $id): ?array
+    {
+        $pdo = SpecialsDatabase::connection();
+        $stmt = $pdo->prepare(
+            "SELECT * FROM specials
+             WHERE id = ? AND active = 1
+               AND (starts_at IS NULL OR starts_at <= NOW())
+               AND (ends_at IS NULL OR ends_at >= NOW())
+             LIMIT 1"
+        );
+        $stmt->execute([$id]);
+
+        return $this->attachOrderableVariants($stmt->fetch());
+    }
+
+    /**
+     * Zelfde als findVisible(), maar via de deelbare slug (/specials/{slug}) i.p.v. het id.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findVisibleBySlug(string $slug): ?array
     {
         $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->prepare(
@@ -191,8 +236,8 @@ final class SpecialRepository
 
         try {
             $stmt = $pdo->prepare(
-                'INSERT INTO specials (title, slug, banner_path, description, active, ship_eu, ship_world, starts_at, ends_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO specials (title, slug, banner_path, description, active, sold_out, ship_eu, ship_world, starts_at, ends_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $data['title'],
@@ -200,6 +245,7 @@ final class SpecialRepository
                 $data['banner_path'],
                 $data['description'],
                 $data['active'] ? 1 : 0,
+                $data['sold_out'] ? 1 : 0,
                 $data['ship_eu'] ? 1 : 0,
                 $data['ship_world'] ? 1 : 0,
                 $data['starts_at'],
@@ -229,7 +275,7 @@ final class SpecialRepository
 
         try {
             $stmt = $pdo->prepare(
-                'UPDATE specials SET title = ?, slug = ?, banner_path = ?, description = ?, active = ?, ship_eu = ?, ship_world = ?, starts_at = ?, ends_at = ?
+                'UPDATE specials SET title = ?, slug = ?, banner_path = ?, description = ?, active = ?, sold_out = ?, ship_eu = ?, ship_world = ?, starts_at = ?, ends_at = ?
                  WHERE id = ?'
             );
             $stmt->execute([
@@ -238,6 +284,7 @@ final class SpecialRepository
                 $data['banner_path'],
                 $data['description'],
                 $data['active'] ? 1 : 0,
+                $data['sold_out'] ? 1 : 0,
                 $data['ship_eu'] ? 1 : 0,
                 $data['ship_world'] ? 1 : 0,
                 $data['starts_at'],
@@ -290,6 +337,13 @@ final class SpecialRepository
         $pdo = SpecialsDatabase::connection();
         $stmt = $pdo->prepare('UPDATE specials SET active = ? WHERE id = ?');
         $stmt->execute([$active ? 1 : 0, $id]);
+    }
+
+    public function setSoldOut(int $id, bool $soldOut): void
+    {
+        $pdo = SpecialsDatabase::connection();
+        $stmt = $pdo->prepare('UPDATE specials SET sold_out = ? WHERE id = ?');
+        $stmt->execute([$soldOut ? 1 : 0, $id]);
     }
 
     public function delete(int $id): void

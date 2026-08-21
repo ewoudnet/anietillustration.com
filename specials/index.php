@@ -15,9 +15,9 @@ $slug = isset($_GET['slug']) ? trim((string) $_GET['slug']) : '';
 $specialId = isset($_GET['s']) ? (int) $_GET['s'] : null;
 
 if ($slug !== '') {
-    $special = $repository->findOrderableBySlug($slug);
+    $special = $repository->findVisibleBySlug($slug);
 } elseif ($specialId !== null) {
-    $special = $repository->findOrderable($specialId);
+    $special = $repository->findVisible($specialId);
 } else {
     $special = null;
 }
@@ -101,7 +101,9 @@ function specialUrl(array $item): string
                 <div class="alert alert-error"><?= h($error) ?></div>
             <?php endforeach; ?>
 
-            <?php if (empty($special['variants'])): ?>
+            <?php if ((int) $special['sold_out'] === 1): ?>
+                <div class="alert alert-error">Deze special is helaas uitverkocht. Bestellen is niet meer mogelijk.</div>
+            <?php elseif (empty($special['variants'])): ?>
                 <div class="alert alert-error">Er zijn momenteel geen prijsvarianten beschikbaar voor deze special.</div>
             <?php else: ?>
                 <form method="post" action="process-order.php" id="order-form">
@@ -270,7 +272,12 @@ function specialUrl(array $item): string
                         <?php if ($item['banner_path']): ?>
                             <img src="assets/<?= h($item['banner_path']) ?>" alt="">
                         <?php endif; ?>
-                        <div class="special-tile-title"><?= h($item['title']) ?></div>
+                        <div class="special-tile-title">
+                            <?= h($item['title']) ?>
+                            <?php if ((int) $item['sold_out'] === 1): ?>
+                                <span class="special-tile-badge">Uitverkocht</span>
+                            <?php endif; ?>
+                        </div>
                     </a>
                 <?php endforeach; ?>
             </div>
