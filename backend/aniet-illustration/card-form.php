@@ -28,10 +28,14 @@ if ($id !== null && $existing === null) {
 
 $channels = SalesChannelRepository::findAll();
 $greetzChannelId = null;
+$kaartje2goChannelId = null;
 $wholesaleChannelId = null;
 foreach ($channels as $channel) {
     if ($channel['name'] === 'Greetz') {
         $greetzChannelId = (int) $channel['id'];
+    }
+    if ($channel['name'] === 'Kaartje2Go') {
+        $kaartje2goChannelId = (int) $channel['id'];
     }
     if ($channel['name'] === 'Wholesale') {
         $wholesaleChannelId = (int) $channel['id'];
@@ -52,11 +56,16 @@ $values = [
     'to_order' => (string) ($existing['to_order'] ?? 0),
     'comments' => $existing['comments'] ?? '',
     'greetz_type' => $existing['greetz_type'] ?? '',
-    'submission_date' => $existing !== null && $existing['submission_date'] !== null
-        ? (new DateTime($existing['submission_date']))->format('d-m-Y') : '',
-    'rejected_date' => $existing !== null && $existing['rejected_date'] !== null
-        ? (new DateTime($existing['rejected_date']))->format('d-m-Y') : '',
+    'greetz_submission_date' => $existing !== null && $existing['greetz_submission_date'] !== null
+        ? (new DateTime($existing['greetz_submission_date']))->format('d-m-Y') : '',
+    'greetz_rejected_date' => $existing !== null && $existing['greetz_rejected_date'] !== null
+        ? (new DateTime($existing['greetz_rejected_date']))->format('d-m-Y') : '',
     'psd_filename' => $existing['psd_filename'] ?? '',
+    'kaartje2go_type' => $existing['kaartje2go_type'] ?? '',
+    'kaartje2go_submission_date' => $existing !== null && $existing['kaartje2go_submission_date'] !== null
+        ? (new DateTime($existing['kaartje2go_submission_date']))->format('d-m-Y') : '',
+    'kaartje2go_rejected_date' => $existing !== null && $existing['kaartje2go_rejected_date'] !== null
+        ? (new DateTime($existing['kaartje2go_rejected_date']))->format('d-m-Y') : '',
     'wholesale_draft' => (int) ($existing['wholesale_draft'] ?? 0),
 ];
 $selectedChannelIds = $existing['sales_channel_ids'] ?? [];
@@ -85,9 +94,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $values['comments'] = trim((string) ($_POST['comments'] ?? ''));
     $values['greetz_type'] = (string) ($_POST['greetz_type'] ?? '');
-    $values['submission_date'] = trim((string) ($_POST['submission_date'] ?? ''));
-    $values['rejected_date'] = trim((string) ($_POST['rejected_date'] ?? ''));
+    $values['greetz_submission_date'] = trim((string) ($_POST['greetz_submission_date'] ?? ''));
+    $values['greetz_rejected_date'] = trim((string) ($_POST['greetz_rejected_date'] ?? ''));
     $values['psd_filename'] = trim((string) ($_POST['psd_filename'] ?? ''));
+    $values['kaartje2go_type'] = (string) ($_POST['kaartje2go_type'] ?? '');
+    $values['kaartje2go_submission_date'] = trim((string) ($_POST['kaartje2go_submission_date'] ?? ''));
+    $values['kaartje2go_rejected_date'] = trim((string) ($_POST['kaartje2go_rejected_date'] ?? ''));
     $values['wholesale_draft'] = isset($_POST['wholesale_draft']) ? 1 : 0;
     $selectedChannelIds = array_map('intval', $_POST['sales_channel_ids'] ?? []);
     $wholesaleSelected = $wholesaleChannelId !== null && in_array($wholesaleChannelId, $selectedChannelIds, true);
@@ -139,25 +151,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Submission/rejected date horen bij de Greetz-sectie en worden genegeerd (niet
     // gevalideerd, niet opgeslagen) als Greetz niet is aangevinkt - zelfde principe als
     // greetz_type hieronder.
-    $submissionDateIso = null;
-    if ($greetzSelected && $values['submission_date'] !== '') {
-        $submissionDateIso = parseNlDate($values['submission_date']);
-        if ($submissionDateIso === null) {
-            $errors[] = 'Submission date moet een geldige datum zijn (dd-mm-jjjj).';
+    $greetzSubmissionDateIso = null;
+    if ($greetzSelected && $values['greetz_submission_date'] !== '') {
+        $greetzSubmissionDateIso = parseNlDate($values['greetz_submission_date']);
+        if ($greetzSubmissionDateIso === null) {
+            $errors[] = 'Submission date (Greetz) moet een geldige datum zijn (dd-mm-jjjj).';
         }
     }
 
-    $rejectedDateIso = null;
-    if ($greetzSelected && $values['rejected_date'] !== '') {
-        $rejectedDateIso = parseNlDate($values['rejected_date']);
-        if ($rejectedDateIso === null) {
-            $errors[] = 'Rejected date moet een geldige datum zijn (dd-mm-jjjj).';
+    $greetzRejectedDateIso = null;
+    if ($greetzSelected && $values['greetz_rejected_date'] !== '') {
+        $greetzRejectedDateIso = parseNlDate($values['greetz_rejected_date']);
+        if ($greetzRejectedDateIso === null) {
+            $errors[] = 'Rejected date (Greetz) moet een geldige datum zijn (dd-mm-jjjj).';
         }
     }
 
     if ($greetzSelected && $values['greetz_type'] === 'nog_in_te_sturen'
-        && ($values['submission_date'] !== '' || $values['rejected_date'] !== '')) {
-        $errors[] = '"Nog in te sturen" kan niet gekozen worden als er al een submission of rejected date is ingevuld.';
+        && ($values['greetz_submission_date'] !== '' || $values['greetz_rejected_date'] !== '')) {
+        $errors[] = '"Nog in te sturen" (Greetz) kan niet gekozen worden als er al een submission of rejected date is ingevuld.';
+    }
+
+    $kaartje2goSelected = $kaartje2goChannelId !== null && in_array($kaartje2goChannelId, $selectedChannelIds, true);
+
+    if ($kaartje2goSelected && !in_array($values['kaartje2go_type'], ['briefing', 'ingestuurd', 'nog_in_te_sturen'], true)) {
+        $errors[] = 'Kies bij de Kaartje2Go-sectie of het een briefing, ingestuurd of nog in te sturen ontwerp is.';
+    }
+
+    $kaartje2goSubmissionDateIso = null;
+    if ($kaartje2goSelected && $values['kaartje2go_submission_date'] !== '') {
+        $kaartje2goSubmissionDateIso = parseNlDate($values['kaartje2go_submission_date']);
+        if ($kaartje2goSubmissionDateIso === null) {
+            $errors[] = 'Submission date (Kaartje2Go) moet een geldige datum zijn (dd-mm-jjjj).';
+        }
+    }
+
+    $kaartje2goRejectedDateIso = null;
+    if ($kaartje2goSelected && $values['kaartje2go_rejected_date'] !== '') {
+        $kaartje2goRejectedDateIso = parseNlDate($values['kaartje2go_rejected_date']);
+        if ($kaartje2goRejectedDateIso === null) {
+            $errors[] = 'Rejected date (Kaartje2Go) moet een geldige datum zijn (dd-mm-jjjj).';
+        }
+    }
+
+    if ($kaartje2goSelected && $values['kaartje2go_type'] === 'nog_in_te_sturen'
+        && ($values['kaartje2go_submission_date'] !== '' || $values['kaartje2go_rejected_date'] !== '')) {
+        $errors[] = '"Nog in te sturen" (Kaartje2Go) kan niet gekozen worden als er al een submission of rejected date is ingevuld.';
     }
 
     if (empty($errors)) {
@@ -189,9 +228,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'to_order' => (int) $values['to_order'],
             'comments' => $values['comments'] !== '' ? $values['comments'] : null,
             'greetz_type' => $greetzSelected ? $values['greetz_type'] : null,
-            'submission_date' => $submissionDateIso,
-            'rejected_date' => $rejectedDateIso,
+            'greetz_submission_date' => $greetzSubmissionDateIso,
+            'greetz_rejected_date' => $greetzRejectedDateIso,
             'psd_filename' => ($greetzSelected && $values['psd_filename'] !== '') ? $values['psd_filename'] : null,
+            'kaartje2go_type' => $kaartje2goSelected ? $values['kaartje2go_type'] : null,
+            'kaartje2go_submission_date' => $kaartje2goSubmissionDateIso,
+            'kaartje2go_rejected_date' => $kaartje2goRejectedDateIso,
             'wholesale_draft' => $wholesaleSelected ? $values['wholesale_draft'] : 0,
         ];
 
@@ -309,16 +351,35 @@ require __DIR__ . '/../partials/layout-start.php';
                 </div>
                 <div class="row" style="margin-top: 12px;">
                     <div class="field">
-                        <label for="submission_date">Submission date</label>
-                        <input type="text" id="submission_date" name="submission_date" placeholder="dd-mm-jjjj" value="<?= h($values['submission_date']) ?>">
+                        <label for="greetz_submission_date">Submission date</label>
+                        <input type="text" id="greetz_submission_date" name="greetz_submission_date" placeholder="dd-mm-jjjj" value="<?= h($values['greetz_submission_date']) ?>">
                     </div>
                     <div class="field">
-                        <label for="rejected_date">Rejected date</label>
-                        <input type="text" id="rejected_date" name="rejected_date" placeholder="dd-mm-jjjj" value="<?= h($values['rejected_date']) ?>">
+                        <label for="greetz_rejected_date">Rejected date</label>
+                        <input type="text" id="greetz_rejected_date" name="greetz_rejected_date" placeholder="dd-mm-jjjj" value="<?= h($values['greetz_rejected_date']) ?>">
                     </div>
                     <div class="field">
                         <label for="psd_filename">PSD file name</label>
                         <input type="text" id="psd_filename" name="psd_filename" value="<?= h($values['psd_filename']) ?>">
+                    </div>
+                </div>
+            </div>
+
+            <div id="kaartje2go-section" class="conditional-field" style="margin-top: 16px;">
+                <label>Kaartje2Go-sectie</label>
+                <div class="checkbox-group">
+                    <label><input type="radio" name="kaartje2go_type" value="briefing" <?= $values['kaartje2go_type'] === 'briefing' ? 'checked' : '' ?>> Briefing</label>
+                    <label><input type="radio" name="kaartje2go_type" value="ingestuurd" <?= $values['kaartje2go_type'] === 'ingestuurd' ? 'checked' : '' ?>> Ingestuurd</label>
+                    <label><input type="radio" name="kaartje2go_type" value="nog_in_te_sturen" <?= $values['kaartje2go_type'] === 'nog_in_te_sturen' ? 'checked' : '' ?>> Nog in te sturen</label>
+                </div>
+                <div class="row" style="margin-top: 12px;">
+                    <div class="field">
+                        <label for="kaartje2go_submission_date">Submission date</label>
+                        <input type="text" id="kaartje2go_submission_date" name="kaartje2go_submission_date" placeholder="dd-mm-jjjj" value="<?= h($values['kaartje2go_submission_date']) ?>">
+                    </div>
+                    <div class="field">
+                        <label for="kaartje2go_rejected_date">Rejected date</label>
+                        <input type="text" id="kaartje2go_rejected_date" name="kaartje2go_rejected_date" placeholder="dd-mm-jjjj" value="<?= h($values['kaartje2go_rejected_date']) ?>">
                     </div>
                 </div>
             </div>
@@ -391,6 +452,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const envelopeColorField = document.getElementById('envelope-color-field');
     const greetzSection = document.getElementById('greetz-section');
     const greetzCheckbox = document.querySelector('input[name="sales_channel_ids[]"][data-name="Greetz"]');
+    const kaartje2goSection = document.getElementById('kaartje2go-section');
+    const kaartje2goCheckbox = document.querySelector('input[name="sales_channel_ids[]"][data-name="Kaartje2Go"]');
     const wholesaleDraftSection = document.getElementById('wholesale-draft-section');
     const wholesaleCheckbox = document.querySelector('input[name="sales_channel_ids[]"][data-name="Wholesale"]');
     const minStockInput = document.getElementById('min_stock');
@@ -409,6 +472,10 @@ document.addEventListener('DOMContentLoaded', () => {
         greetzSection.classList.toggle('visible', greetzCheckbox instanceof HTMLInputElement && greetzCheckbox.checked);
     }
 
+    function updateKaartje2goVisibility() {
+        kaartje2goSection.classList.toggle('visible', kaartje2goCheckbox instanceof HTMLInputElement && kaartje2goCheckbox.checked);
+    }
+
     function updateWholesaleVisibility() {
         const wholesaleSelected = wholesaleCheckbox instanceof HTMLInputElement && wholesaleCheckbox.checked;
         wholesaleDraftSection.classList.toggle('visible', wholesaleSelected);
@@ -419,15 +486,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    const nogInTeSturenRadio = document.querySelector('input[name="greetz_type"][value="nog_in_te_sturen"]');
-    const submissionDateInput = document.getElementById('submission_date');
-    const rejectedDateInput = document.getElementById('rejected_date');
+    const greetzNogInTeSturenRadio = document.querySelector('input[name="greetz_type"][value="nog_in_te_sturen"]');
+    const greetzSubmissionDateInput = document.getElementById('greetz_submission_date');
+    const greetzRejectedDateInput = document.getElementById('greetz_rejected_date');
 
-    function updateNogInTeSturenAvailability() {
-        const hasDate = submissionDateInput.value.trim() !== '' || rejectedDateInput.value.trim() !== '';
-        nogInTeSturenRadio.disabled = hasDate;
-        if (hasDate && nogInTeSturenRadio.checked) {
-            nogInTeSturenRadio.checked = false;
+    function updateGreetzNogInTeSturenAvailability() {
+        const hasDate = greetzSubmissionDateInput.value.trim() !== '' || greetzRejectedDateInput.value.trim() !== '';
+        greetzNogInTeSturenRadio.disabled = hasDate;
+        if (hasDate && greetzNogInTeSturenRadio.checked) {
+            greetzNogInTeSturenRadio.checked = false;
+        }
+    }
+
+    const kaartje2goNogInTeSturenRadio = document.querySelector('input[name="kaartje2go_type"][value="nog_in_te_sturen"]');
+    const kaartje2goSubmissionDateInput = document.getElementById('kaartje2go_submission_date');
+    const kaartje2goRejectedDateInput = document.getElementById('kaartje2go_rejected_date');
+
+    function updateKaartje2goNogInTeSturenAvailability() {
+        const hasDate = kaartje2goSubmissionDateInput.value.trim() !== '' || kaartje2goRejectedDateInput.value.trim() !== '';
+        kaartje2goNogInTeSturenRadio.disabled = hasDate;
+        if (hasDate && kaartje2goNogInTeSturenRadio.checked) {
+            kaartje2goNogInTeSturenRadio.checked = false;
         }
     }
 
@@ -438,17 +517,25 @@ document.addEventListener('DOMContentLoaded', () => {
         greetzCheckbox.addEventListener('change', updateGreetzVisibility);
     }
 
+    if (kaartje2goCheckbox) {
+        kaartje2goCheckbox.addEventListener('change', updateKaartje2goVisibility);
+    }
+
     if (wholesaleCheckbox) {
         wholesaleCheckbox.addEventListener('change', updateWholesaleVisibility);
     }
 
-    submissionDateInput.addEventListener('input', updateNogInTeSturenAvailability);
-    rejectedDateInput.addEventListener('input', updateNogInTeSturenAvailability);
+    greetzSubmissionDateInput.addEventListener('input', updateGreetzNogInTeSturenAvailability);
+    greetzRejectedDateInput.addEventListener('input', updateGreetzNogInTeSturenAvailability);
+    kaartje2goSubmissionDateInput.addEventListener('input', updateKaartje2goNogInTeSturenAvailability);
+    kaartje2goRejectedDateInput.addEventListener('input', updateKaartje2goNogInTeSturenAvailability);
 
     updateEnvelopeVisibility();
     updateGreetzVisibility();
+    updateKaartje2goVisibility();
     updateWholesaleVisibility();
-    updateNogInTeSturenAvailability();
+    updateGreetzNogInTeSturenAvailability();
+    updateKaartje2goNogInTeSturenAvailability();
 });
 </script>
 <?php require __DIR__ . '/../partials/layout-end.php'; ?>

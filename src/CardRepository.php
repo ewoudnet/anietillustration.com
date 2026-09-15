@@ -7,7 +7,7 @@ namespace App;
 final class CardRepository
 {
     /**
-     * @param array{q?: string, sales_channel_id?: int, greetz_status?: string, wholesale_status?: string} $filters
+     * @param array{q?: string, sales_channel_id?: int, greetz_status?: string, kaartje2go_status?: string, wholesale_status?: string} $filters
      * @return array<int, array<string, mixed>>
      */
     public static function search(array $filters = [], ?int $limit = null, int $offset = 0): array
@@ -28,7 +28,7 @@ final class CardRepository
     }
 
     /**
-     * @param array{q?: string, sales_channel_id?: int, greetz_status?: string, wholesale_status?: string} $filters
+     * @param array{q?: string, sales_channel_id?: int, greetz_status?: string, kaartje2go_status?: string, wholesale_status?: string} $filters
      */
     public static function countSearch(array $filters = []): int
     {
@@ -40,7 +40,7 @@ final class CardRepository
     }
 
     /**
-     * @param array{q?: string, sales_channel_id?: int, greetz_status?: string, wholesale_status?: string} $filters
+     * @param array{q?: string, sales_channel_id?: int, greetz_status?: string, kaartje2go_status?: string, wholesale_status?: string} $filters
      * @return array{0: string, 1: string, 2: array<int, mixed>}
      */
     private static function buildWhereClause(array $filters): array
@@ -67,14 +67,27 @@ final class CardRepository
         // Zelfde prioriteitsvolgorde als greetzStatusLabel() in bootstrap.php.
         $greetzStatus = (string) ($filters['greetz_status'] ?? '');
         $greetzCondition = match ($greetzStatus) {
-            'actief' => "(c.rejected_date IS NULL AND c.psd_filename IS NOT NULL AND c.psd_filename != '')",
-            'ingediend' => "(c.rejected_date IS NULL AND (c.psd_filename IS NULL OR c.psd_filename = '') AND c.submission_date IS NOT NULL)",
-            'afgewezen' => 'c.rejected_date IS NOT NULL',
-            'nog_in_te_sturen' => "(c.rejected_date IS NULL AND (c.psd_filename IS NULL OR c.psd_filename = '') AND c.submission_date IS NULL)",
+            'actief' => "(c.greetz_rejected_date IS NULL AND c.psd_filename IS NOT NULL AND c.psd_filename != '')",
+            'ingediend' => "(c.greetz_rejected_date IS NULL AND (c.psd_filename IS NULL OR c.psd_filename = '') AND c.greetz_submission_date IS NOT NULL)",
+            'afgewezen' => 'c.greetz_rejected_date IS NOT NULL',
+            'nog_in_te_sturen' => "(c.greetz_rejected_date IS NULL AND (c.psd_filename IS NULL OR c.psd_filename = '') AND c.greetz_submission_date IS NULL)",
             default => null,
         };
         if ($greetzCondition !== null) {
             $conditions[] = $greetzCondition;
+        }
+
+        // Zelfde prioriteitsvolgorde als kaartje2goStatusLabel() in bootstrap.php (geen
+        // "actief"-status, Kaartje2Go heeft geen PSD-bestandsnaam).
+        $kaartje2goStatus = (string) ($filters['kaartje2go_status'] ?? '');
+        $kaartje2goCondition = match ($kaartje2goStatus) {
+            'ingediend' => '(c.kaartje2go_rejected_date IS NULL AND c.kaartje2go_submission_date IS NOT NULL)',
+            'afgewezen' => 'c.kaartje2go_rejected_date IS NOT NULL',
+            'nog_in_te_sturen' => '(c.kaartje2go_rejected_date IS NULL AND c.kaartje2go_submission_date IS NULL)',
+            default => null,
+        };
+        if ($kaartje2goCondition !== null) {
+            $conditions[] = $kaartje2goCondition;
         }
 
         $wholesaleStatus = (string) ($filters['wholesale_status'] ?? '');
@@ -343,10 +356,11 @@ final class CardRepository
             $id = Database::insert(
                 'INSERT INTO cards
                     (sku, title, image_path, format, card_type, has_envelope, envelope_color, min_stock,
-                     current_stock, to_order, wholesale_draft, comments, greetz_type, submission_date,
-                     rejected_date, psd_filename)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                'sssssisiiiisssss',
+                     current_stock, to_order, wholesale_draft, comments, greetz_type, greetz_submission_date,
+                     greetz_rejected_date, psd_filename, kaartje2go_type, kaartje2go_submission_date,
+                     kaartje2go_rejected_date)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                'sssssisiiiissssssss',
                 [
                     $data['sku'],
                     $data['title'],
@@ -361,9 +375,12 @@ final class CardRepository
                     $data['wholesale_draft'],
                     $data['comments'],
                     $data['greetz_type'],
-                    $data['submission_date'],
-                    $data['rejected_date'],
+                    $data['greetz_submission_date'],
+                    $data['greetz_rejected_date'],
                     $data['psd_filename'],
+                    $data['kaartje2go_type'],
+                    $data['kaartje2go_submission_date'],
+                    $data['kaartje2go_rejected_date'],
                 ]
             );
 
@@ -388,9 +405,10 @@ final class CardRepository
                 'UPDATE cards SET
                     sku = ?, title = ?, image_path = ?, format = ?, card_type = ?, has_envelope = ?, envelope_color = ?,
                     min_stock = ?, current_stock = ?, to_order = ?, wholesale_draft = ?, comments = ?,
-                    greetz_type = ?, submission_date = ?, rejected_date = ?, psd_filename = ?
+                    greetz_type = ?, greetz_submission_date = ?, greetz_rejected_date = ?, psd_filename = ?,
+                    kaartje2go_type = ?, kaartje2go_submission_date = ?, kaartje2go_rejected_date = ?
                  WHERE id = ?',
-                'sssssisiiiisssssi',
+                'sssssisiiiissssssssi',
                 [
                     $data['sku'],
                     $data['title'],
@@ -405,9 +423,12 @@ final class CardRepository
                     $data['wholesale_draft'],
                     $data['comments'],
                     $data['greetz_type'],
-                    $data['submission_date'],
-                    $data['rejected_date'],
+                    $data['greetz_submission_date'],
+                    $data['greetz_rejected_date'],
                     $data['psd_filename'],
+                    $data['kaartje2go_type'],
+                    $data['kaartje2go_submission_date'],
+                    $data['kaartje2go_rejected_date'],
                     $id,
                 ]
             );

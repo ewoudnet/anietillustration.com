@@ -33,7 +33,8 @@ if (($_GET['download'] ?? '') === '1') {
     $cardRows = [[
         'id', 'sku', 'titel', 'formaat', 'type_kaart', 'envelop', 'envelop_kleur',
         'minimale_voorraad', 'huidige_voorraad', 'te_bestellen', 'wholesale_draft', 'verkoopkanalen',
-        'comments', 'greetz_sectie', 'submission_date', 'rejected_date', 'psd_filename',
+        'comments', 'greetz_sectie', 'greetz_submission_date', 'greetz_rejected_date', 'psd_filename',
+        'kaartje2go_sectie', 'kaartje2go_submission_date', 'kaartje2go_rejected_date',
         'datum_creatie',
     ]];
     foreach ($cards as $c) {
@@ -53,9 +54,12 @@ if (($_GET['download'] ?? '') === '1') {
             $channelNames,
             $c['comments'] ?? '',
             $c['greetz_type'] ?? '',
-            $c['submission_date'] !== null ? (new DateTime($c['submission_date']))->format('d-m-Y') : '',
-            $c['rejected_date'] !== null ? (new DateTime($c['rejected_date']))->format('d-m-Y') : '',
+            $c['greetz_submission_date'] !== null ? (new DateTime($c['greetz_submission_date']))->format('d-m-Y') : '',
+            $c['greetz_rejected_date'] !== null ? (new DateTime($c['greetz_rejected_date']))->format('d-m-Y') : '',
             $c['psd_filename'] ?? '',
+            $c['kaartje2go_type'] ?? '',
+            $c['kaartje2go_submission_date'] !== null ? (new DateTime($c['kaartje2go_submission_date']))->format('d-m-Y') : '',
+            $c['kaartje2go_rejected_date'] !== null ? (new DateTime($c['kaartje2go_rejected_date']))->format('d-m-Y') : '',
             (new DateTime($c['created_at']))->format('d-m-Y H:i'),
         ];
     }
@@ -239,19 +243,35 @@ function buildCardPlan(array $rows): array
 
         $hasEnvelope = $cardType === 'gevouwen' ? yesNoToInt($row['envelop'] ?? '') : null;
 
-        $submissionDate = null;
-        if (($row['submission_date'] ?? '') !== '') {
-            $submissionDate = parseNlDate($row['submission_date']);
-            if ($submissionDate === null) {
-                $warnings[] = 'Submission date ("' . $row['submission_date'] . '") is ongeldig (verwacht dd-mm-jjjj), veld genegeerd.';
+        $greetzSubmissionDate = null;
+        if (($row['greetz_submission_date'] ?? '') !== '') {
+            $greetzSubmissionDate = parseNlDate($row['greetz_submission_date']);
+            if ($greetzSubmissionDate === null) {
+                $warnings[] = 'Submission date (Greetz) ("' . $row['greetz_submission_date'] . '") is ongeldig (verwacht dd-mm-jjjj), veld genegeerd.';
             }
         }
 
-        $rejectedDate = null;
-        if (($row['rejected_date'] ?? '') !== '') {
-            $rejectedDate = parseNlDate($row['rejected_date']);
-            if ($rejectedDate === null) {
-                $warnings[] = 'Rejected date ("' . $row['rejected_date'] . '") is ongeldig (verwacht dd-mm-jjjj), veld genegeerd.';
+        $greetzRejectedDate = null;
+        if (($row['greetz_rejected_date'] ?? '') !== '') {
+            $greetzRejectedDate = parseNlDate($row['greetz_rejected_date']);
+            if ($greetzRejectedDate === null) {
+                $warnings[] = 'Rejected date (Greetz) ("' . $row['greetz_rejected_date'] . '") is ongeldig (verwacht dd-mm-jjjj), veld genegeerd.';
+            }
+        }
+
+        $kaartje2goSubmissionDate = null;
+        if (($row['kaartje2go_submission_date'] ?? '') !== '') {
+            $kaartje2goSubmissionDate = parseNlDate($row['kaartje2go_submission_date']);
+            if ($kaartje2goSubmissionDate === null) {
+                $warnings[] = 'Submission date (Kaartje2Go) ("' . $row['kaartje2go_submission_date'] . '") is ongeldig (verwacht dd-mm-jjjj), veld genegeerd.';
+            }
+        }
+
+        $kaartje2goRejectedDate = null;
+        if (($row['kaartje2go_rejected_date'] ?? '') !== '') {
+            $kaartje2goRejectedDate = parseNlDate($row['kaartje2go_rejected_date']);
+            if ($kaartje2goRejectedDate === null) {
+                $warnings[] = 'Rejected date (Kaartje2Go) ("' . $row['kaartje2go_rejected_date'] . '") is ongeldig (verwacht dd-mm-jjjj), veld genegeerd.';
             }
         }
 
@@ -269,6 +289,9 @@ function buildCardPlan(array $rows): array
         $greetzType = strtolower($row['greetz_sectie'] ?? '');
         $greetzType = in_array($greetzType, ['briefing', 'ingestuurd', 'nog_in_te_sturen'], true) ? $greetzType : null;
 
+        $kaartje2goType = strtolower($row['kaartje2go_sectie'] ?? '');
+        $kaartje2goType = in_array($kaartje2goType, ['briefing', 'ingestuurd', 'nog_in_te_sturen'], true) ? $kaartje2goType : null;
+
         $wholesaleDraft = yesNoToInt($row['wholesale_draft'] ?? '') ?? 0;
 
         $data = [
@@ -285,9 +308,12 @@ function buildCardPlan(array $rows): array
             'wholesale_draft' => $wholesaleDraft,
             'comments' => $row['comments'] !== '' ? $row['comments'] : null,
             'greetz_type' => $greetzType,
-            'submission_date' => $submissionDate,
-            'rejected_date' => $rejectedDate,
+            'greetz_submission_date' => $greetzSubmissionDate,
+            'greetz_rejected_date' => $greetzRejectedDate,
             'psd_filename' => $row['psd_filename'] !== '' ? $row['psd_filename'] : null,
+            'kaartje2go_type' => $kaartje2goType,
+            'kaartje2go_submission_date' => $kaartje2goSubmissionDate,
+            'kaartje2go_rejected_date' => $kaartje2goRejectedDate,
         ];
 
         $existing = CardRepository::findBySku($sku);
@@ -718,7 +744,7 @@ require __DIR__ . '/../partials/layout-start.php';
     <h3 style="margin-top: 0;">📤 Exporteren</h3>
     <p>Download een Excel-bestand (.xlsx) met alle gegevens uit deze sectie, verdeeld over vier tabbladen:</p>
     <ul>
-        <li><strong>Kaarten</strong> - alle velden inclusief verkoopkanalen (als namen) en Greetz-tracking.</li>
+        <li><strong>Kaarten</strong> - alle velden inclusief verkoopkanalen (als namen) en Greetz-/Kaartje2Go-tracking.</li>
         <li><strong>Producttypes</strong></li>
         <li><strong>Sale channels</strong> - inclusief gekoppelde producttypes (als namen).</li>
         <li><strong>Producten</strong> - alle overige producttypes (boekenleggers, notitieblokken, ...), inclusief welk producttype (als naam).</li>

@@ -44,12 +44,15 @@ $data = [
     'to_order' => 0,
     'wholesale_draft' => $original['wholesale_draft'],
     'comments' => $original['comments'],
-    // Greetz-tracking hoort bij het submission-traject van het ORIGINEEL; de kopie
-    // start hierin blanco, ook als hij later (opnieuw) naar Greetz gaat.
+    // Greetz/Kaartje2Go-tracking hoort bij het submission-traject van het ORIGINEEL; de
+    // kopie start hierin blanco, ook als hij later (opnieuw) naar Greetz/Kaartje2Go gaat.
     'greetz_type' => null,
-    'submission_date' => null,
-    'rejected_date' => null,
+    'greetz_submission_date' => null,
+    'greetz_rejected_date' => null,
     'psd_filename' => $original['psd_filename'],
+    'kaartje2go_type' => null,
+    'kaartje2go_submission_date' => null,
+    'kaartje2go_rejected_date' => null,
 ];
 
 $wholesaleChannelId = null;

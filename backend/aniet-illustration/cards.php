@@ -20,13 +20,20 @@ $filters = [
     'q' => trim((string) ($_GET['q'] ?? '')),
     'sales_channel_id' => (int) ($_GET['sales_channel_id'] ?? 0),
     'greetz_status' => trim((string) ($_GET['greetz_status'] ?? '')),
+    'kaartje2go_status' => trim((string) ($_GET['kaartje2go_status'] ?? '')),
     'wholesale_status' => trim((string) ($_GET['wholesale_status'] ?? '')),
 ];
 $hasFilters = $filters['q'] !== '' || $filters['sales_channel_id'] > 0
-    || $filters['greetz_status'] !== '' || $filters['wholesale_status'] !== '';
+    || $filters['greetz_status'] !== '' || $filters['kaartje2go_status'] !== '' || $filters['wholesale_status'] !== '';
 
 $greetzStatusLabels = [
     'actief' => 'Actief',
+    'ingediend' => 'Ingediend',
+    'afgewezen' => 'Afgewezen',
+    'nog_in_te_sturen' => 'Nog in te sturen',
+];
+
+$kaartje2goStatusLabels = [
     'ingediend' => 'Ingediend',
     'afgewezen' => 'Afgewezen',
     'nog_in_te_sturen' => 'Nog in te sturen',
@@ -47,16 +54,21 @@ $cards = CardRepository::search($filters, CARDS_PER_PAGE, ($page - 1) * CARDS_PE
 $channels = SalesChannelRepository::findAll();
 
 $greetzChannelId = null;
+$kaartje2goChannelId = null;
 $wholesaleChannelId = null;
 foreach ($channels as $channel) {
     if ($channel['name'] === 'Greetz') {
         $greetzChannelId = (int) $channel['id'];
+    }
+    if ($channel['name'] === 'Kaartje2Go') {
+        $kaartje2goChannelId = (int) $channel['id'];
     }
     if ($channel['name'] === 'Wholesale') {
         $wholesaleChannelId = (int) $channel['id'];
     }
 }
 $showGreetzStatus = $greetzChannelId !== null && $filters['sales_channel_id'] === $greetzChannelId;
+$showKaartje2goStatus = $kaartje2goChannelId !== null && $filters['sales_channel_id'] === $kaartje2goChannelId;
 $showWholesaleStatus = $wholesaleChannelId !== null && $filters['sales_channel_id'] === $wholesaleChannelId;
 
 $pageTitle = 'Kaartoverzicht';
@@ -102,6 +114,15 @@ require __DIR__ . '/../partials/layout-start.php';
                     <?php endforeach; ?>
                 </select>
             </div>
+            <div class="field conditional-field <?= $showKaartje2goStatus ? 'visible' : '' ?>" id="kaartje2go-status-field" style="flex: 1 1 160px;">
+                <label for="kaartje2go_status">Kaartje2Go-status</label>
+                <select id="kaartje2go_status" name="kaartje2go_status">
+                    <option value="">Alle</option>
+                    <?php foreach ($kaartje2goStatusLabels as $value => $label): ?>
+                        <option value="<?= h($value) ?>" <?= $filters['kaartje2go_status'] === $value ? 'selected' : '' ?>><?= h($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="field conditional-field <?= $showWholesaleStatus ? 'visible' : '' ?>" id="wholesale-status-field" style="flex: 1 1 160px;">
                 <label for="wholesale_status">Wholesale-status</label>
                 <select id="wholesale_status" name="wholesale_status">
@@ -128,6 +149,10 @@ require __DIR__ . '/../partials/layout-start.php';
         var statusSelect = document.getElementById('greetz_status');
         var greetzId = <?= $greetzChannelId !== null ? (int) $greetzChannelId : 'null' ?>;
 
+        var kaartje2goStatusField = document.getElementById('kaartje2go-status-field');
+        var kaartje2goStatusSelect = document.getElementById('kaartje2go_status');
+        var kaartje2goId = <?= $kaartje2goChannelId !== null ? (int) $kaartje2goChannelId : 'null' ?>;
+
         var wholesaleStatusField = document.getElementById('wholesale-status-field');
         var wholesaleStatusSelect = document.getElementById('wholesale_status');
         var wholesaleId = <?= $wholesaleChannelId !== null ? (int) $wholesaleChannelId : 'null' ?>;
@@ -139,6 +164,12 @@ require __DIR__ . '/../partials/layout-start.php';
             statusField.classList.toggle('visible', isGreetz);
             if (!isGreetz) {
                 statusSelect.value = '';
+            }
+
+            var isKaartje2go = kaartje2goId !== null && selected === kaartje2goId;
+            kaartje2goStatusField.classList.toggle('visible', isKaartje2go);
+            if (!isKaartje2go) {
+                kaartje2goStatusSelect.value = '';
             }
 
             var isWholesale = wholesaleId !== null && selected === wholesaleId;
@@ -173,6 +204,9 @@ require __DIR__ . '/../partials/layout-start.php';
                     <?php if ($showGreetzStatus): ?>
                         <th style="width: 200px;">Greetz-status</th>
                     <?php endif; ?>
+                    <?php if ($showKaartje2goStatus): ?>
+                        <th style="width: 200px;">Kaartje2Go-status</th>
+                    <?php endif; ?>
                     <th style="width: 76px;">Acties</th>
                 </tr>
                 </thead>
@@ -196,14 +230,25 @@ require __DIR__ . '/../partials/layout-start.php';
                         <?php if ($showGreetzStatus): ?>
                             <td>
                                 <span class="badge <?= greetzStatusBadgeClass($cardRow) ?>"><?= h(greetzStatusLabel($cardRow)) ?></span>
-                                <?php if (!empty($cardRow['submission_date'])): ?>
-                                    <div class="hint">Submitted: <?= h(nlDate($cardRow['submission_date'])) ?></div>
+                                <?php if (!empty($cardRow['greetz_submission_date'])): ?>
+                                    <div class="hint">Submitted: <?= h(nlDate($cardRow['greetz_submission_date'])) ?></div>
                                 <?php endif; ?>
-                                <?php if (!empty($cardRow['rejected_date'])): ?>
-                                    <div class="hint">Rejected: <?= h(nlDate($cardRow['rejected_date'])) ?></div>
+                                <?php if (!empty($cardRow['greetz_rejected_date'])): ?>
+                                    <div class="hint">Rejected: <?= h(nlDate($cardRow['greetz_rejected_date'])) ?></div>
                                 <?php endif; ?>
                                 <?php if (!empty($cardRow['psd_filename'])): ?>
                                     <div class="hint">PSD: <?= h($cardRow['psd_filename']) ?></div>
+                                <?php endif; ?>
+                            </td>
+                        <?php endif; ?>
+                        <?php if ($showKaartje2goStatus): ?>
+                            <td>
+                                <span class="badge <?= kaartje2goStatusBadgeClass($cardRow) ?>"><?= h(kaartje2goStatusLabel($cardRow)) ?></span>
+                                <?php if (!empty($cardRow['kaartje2go_submission_date'])): ?>
+                                    <div class="hint">Submitted: <?= h(nlDate($cardRow['kaartje2go_submission_date'])) ?></div>
+                                <?php endif; ?>
+                                <?php if (!empty($cardRow['kaartje2go_rejected_date'])): ?>
+                                    <div class="hint">Rejected: <?= h(nlDate($cardRow['kaartje2go_rejected_date'])) ?></div>
                                 <?php endif; ?>
                             </td>
                         <?php endif; ?>
@@ -235,6 +280,7 @@ require __DIR__ . '/../partials/layout-start.php';
             'q' => $filters['q'],
             'sales_channel_id' => $filters['sales_channel_id'] ?: '',
             'greetz_status' => $filters['greetz_status'],
+            'kaartje2go_status' => $filters['kaartje2go_status'],
             'wholesale_status' => $filters['wholesale_status'],
         ], 'cards.php') ?>
     <?php endif; ?>

@@ -93,14 +93,14 @@ function parseNlDate(string $input): ?string
 }
 
 /**
- * Afgeleide Greetz-status van een kaart, gebaseerd op rejected_date/psd_filename/
- * submission_date. Alleen zinvol voor kaarten die Greetz als verkoopkanaal hebben.
+ * Afgeleide Greetz-status van een kaart, gebaseerd op greetz_rejected_date/psd_filename/
+ * greetz_submission_date. Alleen zinvol voor kaarten die Greetz als verkoopkanaal hebben.
  *
  * @param array<string, mixed> $card
  */
 function greetzStatusLabel(array $card): string
 {
-    if (!empty($card['rejected_date'])) {
+    if (!empty($card['greetz_rejected_date'])) {
         return 'Afgewezen';
     }
 
@@ -108,7 +108,7 @@ function greetzStatusLabel(array $card): string
         return 'Actief';
     }
 
-    if (!empty($card['submission_date'])) {
+    if (!empty($card['greetz_submission_date'])) {
         return 'Ingediend';
     }
 
@@ -123,6 +123,39 @@ function greetzStatusBadgeClass(array $card): string
     return match (greetzStatusLabel($card)) {
         'Afgewezen' => 'badge-failed',
         'Actief' => 'badge-paid',
+        'Ingediend' => 'badge-open',
+        default => 'badge-muted',
+    };
+}
+
+/**
+ * Afgeleide Kaartje2Go-status van een kaart, gebaseerd op kaartje2go_rejected_date/
+ * kaartje2go_submission_date. Alleen zinvol voor kaarten die Kaartje2Go als
+ * verkoopkanaal hebben. Kaartje2Go kent geen PSD-bestandsnaam, dus geen "Actief"-status
+ * zoals bij Greetz.
+ *
+ * @param array<string, mixed> $card
+ */
+function kaartje2goStatusLabel(array $card): string
+{
+    if (!empty($card['kaartje2go_rejected_date'])) {
+        return 'Afgewezen';
+    }
+
+    if (!empty($card['kaartje2go_submission_date'])) {
+        return 'Ingediend';
+    }
+
+    return 'Nog in te sturen';
+}
+
+/**
+ * @param array<string, mixed> $card
+ */
+function kaartje2goStatusBadgeClass(array $card): string
+{
+    return match (kaartje2goStatusLabel($card)) {
+        'Afgewezen' => 'badge-failed',
         'Ingediend' => 'badge-open',
         default => 'badge-muted',
     };
