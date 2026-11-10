@@ -128,7 +128,7 @@ function specialUrl(array $item): string
                         </div>
                     </fieldset>
 
-                    <fieldset>
+                    <fieldset id="shipping-fieldset">
                         <legend>Verzendadres</legend>
                         <div class="row">
                             <div class="field" style="flex: 2 1 220px;">
@@ -167,7 +167,7 @@ function specialUrl(array $item): string
                             <input type="hidden" name="price_variant_id" value="<?= (int) $onlyVariant['id'] ?>">
                             <div class="field">
                                 <label>Product</label>
-                                <p><?= h($onlyVariant['label']) ?> &mdash; €<span class="variant-price" data-variant-id="<?= (int) $onlyVariant['id'] ?>"><?= h(formatEuro((int) $onlyVariant['price_nl_cents'])) ?></span></p>
+                                <p><?= h($onlyVariant['label']) ?><?= !empty($onlyVariant['is_digital']) ? ' (instant download)' : '' ?> &mdash; €<span class="variant-price" data-variant-id="<?= (int) $onlyVariant['id'] ?>"><?= h(formatEuro((int) $onlyVariant['price_nl_cents'])) ?></span></p>
                             </div>
                         <?php else: ?>
                             <div class="field">
@@ -176,13 +176,13 @@ function specialUrl(array $item): string
                                     <label class="variant-option">
                                         <input type="radio" name="price_variant_id" value="<?= (int) $variant['id'] ?>"
                                             <?= (string) ($old['price_variant_id'] ?? '') === (string) $variant['id'] ? 'checked' : '' ?> required>
-                                        <?= h($variant['label']) ?> &mdash; €<span class="variant-price" data-variant-id="<?= (int) $variant['id'] ?>"><?= h(formatEuro((int) $variant['price_nl_cents'])) ?></span>
+                                        <?= h($variant['label']) ?><?= !empty($variant['is_digital']) ? ' (instant download)' : '' ?> &mdash; €<span class="variant-price" data-variant-id="<?= (int) $variant['id'] ?>"><?= h(formatEuro((int) $variant['price_nl_cents'])) ?></span>
                                     </label>
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
 
-                        <div class="field" style="max-width: 160px;">
+                        <div class="field" id="quantity-field" style="max-width: 160px;">
                             <label for="quantity">Aantal *</label>
                             <input type="number" id="quantity" name="quantity" min="1" max="20" value="<?= h($old['quantity'] ?? '1') ?>" required>
                         </div>
@@ -208,6 +208,7 @@ function specialUrl(array $item): string
                         variants: <?= json_encode(array_map(
                             static fn (array $v): array => [
                                 'id' => (int) $v['id'],
+                                'digital' => !empty($v['is_digital']),
                                 'nl' => (int) $v['price_nl_cents'],
                                 'eu' => $v['price_eu_cents'] !== null ? (int) $v['price_eu_cents'] : null,
                                 'world' => $v['price_world_cents'] !== null ? (int) $v['price_world_cents'] : null,
@@ -229,11 +230,23 @@ function specialUrl(array $item): string
                         return pricing.variants.find((v) => v.id === parseInt(input.value, 10)) || null;
                     }
 
+                    // Instant download: geen adres/land/aantal nodig. Velden worden uitgeschakeld zodat
+                    // hun "required" het versturen niet blokkeert en ze niet meegestuurd worden.
+                    function toggleDigital(isDigital) {
+                        document.querySelectorAll('#shipping-fieldset input, #shipping-fieldset select, #quantity').forEach(function (el) {
+                            el.disabled = isDigital;
+                        });
+                        document.getElementById('shipping-fieldset').style.display = isDigital ? 'none' : '';
+                        document.getElementById('quantity-field').style.display = isDigital ? 'none' : '';
+                    }
+
                     function updatePricing() {
                         const variant = selectedVariant();
-                        const countryCode = document.getElementById('country_code').value;
+                        const isDigital = !!(variant && variant.digital);
+                        toggleDigital(isDigital);
+                        const countryCode = isDigital ? 'NL' : document.getElementById('country_code').value;
                         const zone = pricing.countryZones[countryCode] || 'nl';
-                        const qty = Math.max(1, parseInt(document.getElementById('quantity').value || '1', 10));
+                        const qty = isDigital ? 1 : Math.max(1, parseInt(document.getElementById('quantity').value || '1', 10));
 
                         document.querySelectorAll('.variant-price').forEach(function (el) {
                             const v = pricing.variants.find((item) => item.id === parseInt(el.dataset.variantId, 10));

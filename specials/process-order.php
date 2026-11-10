@@ -45,6 +45,10 @@ if (!empty($errors)) {
     backToFormWithErrors($errors, $_POST, $specialId, $slugForRedirect);
 }
 
+if (!empty($data['variant']['is_digital']) && count((new \App\SpecialDownloadRepository())->findBySpecial($specialId)) === 0) {
+    backToFormWithErrors(['Deze download is momenteel niet beschikbaar.'], $_POST, $specialId, $slugForRedirect);
+}
+
 try {
     $orderRepository = new OrderRepository();
     $order = $orderRepository->create($specialId, $data, $data['variant']);

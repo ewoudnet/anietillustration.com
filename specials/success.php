@@ -52,6 +52,10 @@ $status = $order['status'] ?? null;
             <p>Bestelnummer: <strong><?= h($order['order_reference']) ?></strong></p>
             <p>Totaal: € <?= h(number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.')) ?></p>
             <p>We hebben een bevestiging gestuurd naar <?= h($order['email']) ?>.</p>
+            <?php if (!empty($order['is_digital']) && !empty($order['download_token'])): ?>
+                <p><a class="btn" style="display: inline-block; width: auto;" href="download.php?t=<?= h(urlencode($order['download_token'])) ?>">⬇ Download je bestand(en)</a></p>
+                <p>Je ontvangt de downloadlink ook per e-mail.</p>
+            <?php endif; ?>
         <?php elseif (in_array($status, ['canceled', 'failed', 'expired'], true)): ?>
             <div class="alert alert-error">
                 De betaling is niet gelukt (status: <?= h($status) ?>). Er is niets afgeschreven.

@@ -49,6 +49,13 @@ lopende specials met daaronder de verlopen specials.
   filtert op `sold_out = 0`). Onafhankelijk van `active` te zetten, quick-
   toggle in het backend-overzicht en checkbox in het bewerkformulier.
 - [x] Directe link vanuit het bewerkformulier naar de publieke special-pagina
+- [x] Instant download: prijsvariant met type "Instant download" (één prijs, geen
+  adres/land/aantal). Bestanden hangen aan de special (`special_downloads`), worden
+  na betaling via een persoonlijke link (`specials/download.php?t={token}`) in de
+  bevestigingsmail geleverd en staan beveiligd in `storage/downloads/` (live:
+  binnen `anietillustration-core/`). Migratie: `sql/migrations/012_special_downloads.sql`
+  (**eerst op de database draaien, daarna pas deployen**). Zie
+  `docs/features/instant-download.md`.
 
 ## Statusbepaling (lopend/verlopen/concept)
 - **Concept** (nooit publiek zichtbaar): `active = 0`.

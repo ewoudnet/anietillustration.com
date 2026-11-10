@@ -34,10 +34,24 @@ CREATE TABLE IF NOT EXISTS special_price_variants (
     price_eu_cents INT UNSIGNED DEFAULT NULL,
     price_world_cents INT UNSIGNED DEFAULT NULL,
     sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    is_digital TINYINT(1) NOT NULL DEFAULT 0,
     active TINYINT(1) NOT NULL DEFAULT 1,
     PRIMARY KEY (id),
     KEY idx_special_id (special_id),
     CONSTRAINT fk_variant_special FOREIGN KEY (special_id) REFERENCES specials (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS special_downloads (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    special_id INT UNSIGNED NOT NULL,
+    original_name VARCHAR(255) NOT NULL,
+    stored_name VARCHAR(64) NOT NULL,
+    size_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_download_special (special_id),
+    CONSTRAINT fk_download_special FOREIGN KEY (special_id) REFERENCES specials (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -47,6 +61,7 @@ CREATE TABLE IF NOT EXISTS orders (
     special_id INT UNSIGNED DEFAULT NULL,
     price_variant_id INT UNSIGNED DEFAULT NULL,
     variant_label VARCHAR(100) DEFAULT NULL,
+    is_digital TINYINT(1) NOT NULL DEFAULT 0,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     street VARCHAR(150) NOT NULL,
@@ -64,6 +79,7 @@ CREATE TABLE IF NOT EXISTS orders (
     traffic_source VARCHAR(100) DEFAULT NULL,
     notes TEXT DEFAULT NULL,
     mollie_payment_id VARCHAR(50) DEFAULT NULL,
+    download_token CHAR(64) DEFAULT NULL,
     confirmation_email_sent_at DATETIME DEFAULT NULL,
     deleted_at DATETIME DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -71,6 +87,7 @@ CREATE TABLE IF NOT EXISTS orders (
     PRIMARY KEY (id),
     UNIQUE KEY uq_order_reference (order_reference),
     UNIQUE KEY uq_mollie_payment_id (mollie_payment_id),
+    UNIQUE KEY uq_download_token (download_token),
     KEY idx_special_id (special_id),
     KEY idx_order_type (order_type),
     CONSTRAINT fk_order_special FOREIGN KEY (special_id) REFERENCES specials (id) ON DELETE SET NULL

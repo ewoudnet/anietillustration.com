@@ -8,11 +8,13 @@ use App\Auth;
 use App\Config;
 use App\Csrf;
 use App\ImageUpload;
+use App\SpecialDownloadRepository;
 use App\SpecialRepository;
 
 Auth::requireSection('specials');
 
 $repository = new SpecialRepository();
+$downloadRepository = new SpecialDownloadRepository();
 $id = isset($_GET['id']) ? (int) $_GET['id'] : (isset($_POST['id']) ? (int) $_POST['id'] : null);
 $special = $id !== null ? $repository->find($id) : null;
 
@@ -21,7 +23,9 @@ if ($id !== null && $special === null) {
     exit;
 }
 
-$errors = [];
+$errors = $_SESSION['download_errors'] ?? [];
+unset($_SESSION['download_errors']);
+$existingDownloads = $special !== null ? $downloadRepository->findBySpecial((int) $special['id']) : [];
 
 /** @var array<string, mixed> $formData */
 $formData = $special ?? [
@@ -49,6 +53,7 @@ $variantRows = $special !== null
             'price_nl' => formatPriceInput((int) $v['price_nl_cents']),
             'price_eu' => formatPriceInput($v['price_eu_cents'] !== null ? (int) $v['price_eu_cents'] : null),
             'price_world' => formatPriceInput($v['price_world_cents'] !== null ? (int) $v['price_world_cents'] : null),
+            'type' => !empty($v['is_digital']) ? 'digital' : 'physical',
         ],
         $repository->findVariants((int) $special['id'])
     )
@@ -110,6 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $variantPricesNl = $_POST['variant_price_nl'] ?? [];
     $variantPricesEu = $_POST['variant_price_eu'] ?? [];
     $variantPricesWorld = $_POST['variant_price_world'] ?? [];
+    $variantTypes = $_POST['variant_type'] ?? [];
     $variants = [];
     $variantRows = [];
 
@@ -118,16 +124,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $rawNl = trim((string) ($variantPricesNl[$index] ?? ''));
         $rawEu = trim((string) ($variantPricesEu[$index] ?? ''));
         $rawWorld = trim((string) ($variantPricesWorld[$index] ?? ''));
+        $isDigital = ($variantTypes[$index] ?? 'physical') === 'digital';
 
         if ($label === '' && $rawNl === '' && $rawEu === '' && $rawWorld === '') {
             continue;
         }
 
-        $variantRows[] = ['label' => $label, 'price_nl' => $rawNl, 'price_eu' => $rawEu, 'price_world' => $rawWorld];
+        $variantRows[] = ['label' => $label, 'price_nl' => $rawNl, 'price_eu' => $rawEu, 'price_world' => $rawWorld, 'type' => $isDigital ? 'digital' : 'physical'];
 
+        // Instant download: één prijs (het NL-veld), geen zone-prijzen.
         [$priceNl, $nlValid] = $parsePrice($rawNl, true);
-        [$priceEu, $euValid] = $parsePrice($rawEu, (bool) $formData['ship_eu']);
-        [$priceWorld, $worldValid] = $parsePrice($rawWorld, (bool) $formData['ship_world']);
+        [$priceEu, $euValid] = $isDigital ? [null, true] : $parsePrice($rawEu, (bool) $formData['ship_eu']);
+        [$priceWorld, $worldValid] = $isDigital ? [null, true] : $parsePrice($rawWorld, (bool) $formData['ship_world']);
 
         if ($label === '' || !$nlValid || !$euValid || !$worldValid) {
             $errors[] = 'Vul bij elke prijsvariant een label en geldige prijzen in (NL verplicht, EU/wereld verplicht als je daar naar verzendt).';
@@ -139,7 +147,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'price_nl_cents' => $priceNl,
             'price_eu_cents' => $priceEu,
             'price_world_cents' => $priceWorld,
+            'is_digital' => $isDigital,
         ];
+    }
+
+    // Downloads: bestanden die blijven + nieuw geüploade, om te checken of een digitale variant iets te leveren heeft.
+    $deleteIds = array_map('intval', (array) ($_POST['delete_downloads'] ?? []));
+    $newUploads = [];
+    foreach ((array) ($_FILES['downloads']['name'] ?? []) as $i => $name) {
+        if (($_FILES['downloads']['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            continue;
+        }
+        $newUploads[] = [
+            'name' => $name,
+            'tmp_name' => $_FILES['downloads']['tmp_name'][$i],
+            'error' => $_FILES['downloads']['error'][$i],
+            'size' => $_FILES['downloads']['size'][$i],
+        ];
+    }
+    $remainingDownloads = count(array_filter($existingDownloads, static fn (array $d): bool => !in_array((int) $d['id'], $deleteIds, true))) + count($newUploads);
+    $hasDigitalVariant = (bool) array_filter($variants, static fn (array $v): bool => $v['is_digital']);
+
+    if ($hasDigitalVariant && $remainingDownloads === 0) {
+        $errors[] = 'Er is een instant download-variant, maar nog geen bestand geüpload. Upload minimaal één bestand bij "Downloads".';
     }
 
     if (empty($errors) && count($variants) === 0) {
@@ -176,11 +206,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($special !== null) {
             $repository->update((int) $special['id'], $data, $variants);
-            header('Location: index.php?updated=1');
+            $savedId = (int) $special['id'];
+            $redirect = 'index.php?updated=1';
         } else {
-            $repository->create($data, $variants);
-            header('Location: index.php?created=1');
+            $savedId = $repository->create($data, $variants);
+            $redirect = 'index.php?created=1';
         }
+
+        foreach ($deleteIds as $deleteId) {
+            $row = $downloadRepository->find($deleteId);
+            if ($row !== null && (int) $row['special_id'] === $savedId) {
+                $downloadRepository->delete($deleteId);
+            }
+        }
+
+        $uploadErrors = [];
+        foreach ($newUploads as $upload) {
+            try {
+                $downloadRepository->store($savedId, $upload);
+            } catch (\RuntimeException $e) {
+                $uploadErrors[] = $e->getMessage();
+            }
+        }
+
+        if ($uploadErrors !== []) {
+            // Special is wel opgeslagen; terug naar het formulier zodat de fout niet ongemerkt blijft.
+            $_SESSION['download_errors'] = array_merge(['De special is opgeslagen, maar niet alle downloads zijn geüpload:'], $uploadErrors);
+            $redirect = 'form.php?id=' . $savedId;
+        }
+
+        header('Location: ' . $redirect);
         exit;
     }
 
@@ -188,7 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if (empty($variantRows)) {
-    $variantRows[] = ['label' => '', 'price_nl' => '', 'price_eu' => '', 'price_world' => ''];
+    $variantRows[] = ['label' => '', 'price_nl' => '', 'price_eu' => '', 'price_world' => '', 'type' => 'physical'];
 }
 
 function dateInputValue(?string $value): string
@@ -268,6 +323,24 @@ require __DIR__ . '/../partials/layout-start.php';
             </label>
         </div>
 
+        <h3>Downloads (instant download)</h3>
+        <p class="hint">Bestanden die klanten van een variant met type "Instant download" na betaling ontvangen via een persoonlijke link in de bevestigingsmail. De bestanden worden beveiligd opgeslagen (niet publiek bereikbaar). Alle bestanden van deze special worden bij elke download-bestelling meegeleverd.</p>
+        <?php if (!empty($existingDownloads)): ?>
+            <ul style="list-style: none; padding: 0; margin: 0 0 12px;">
+                <?php foreach ($existingDownloads as $download): ?>
+                    <li style="margin-bottom: 4px;">
+                        📎 <?= h($download['original_name']) ?>
+                        <small>(<?= h(number_format(((int) $download['size_bytes']) / 1048576, 1, ',', '.')) ?> MB)</small>
+                        &nbsp;<label style="display: inline;"><input type="checkbox" name="delete_downloads[]" value="<?= (int) $download['id'] ?>" style="width: auto; margin-right: 4px;">verwijderen bij opslaan</label>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+        <div class="field">
+            <label for="downloads">Bestand(en) toevoegen (max. 100 MB per bestand)</label>
+            <input type="file" id="downloads" name="downloads[]" multiple>
+        </div>
+
         <h3>Verzendgebied</h3>
         <div class="field">
             <label>
@@ -289,8 +362,15 @@ require __DIR__ . '/../partials/layout-start.php';
                         <label>Label</label>
                         <input type="text" name="variant_label[]" placeholder="bijv. 1 kaart" value="<?= h($variant['label']) ?>">
                     </div>
+                    <div class="field" style="flex: 1 1 130px;">
+                        <label>Type</label>
+                        <select name="variant_type[]" class="variant-type">
+                            <option value="physical"<?= ($variant['type'] ?? 'physical') === 'physical' ? ' selected' : '' ?>>Fysiek</option>
+                            <option value="digital"<?= ($variant['type'] ?? '') === 'digital' ? ' selected' : '' ?>>Instant download</option>
+                        </select>
+                    </div>
                     <div class="field" style="flex: 1 1 110px;">
-                        <label>NL (€)</label>
+                        <label class="variant-nl-label">NL (€)</label>
                         <input type="text" name="variant_price_nl[]" placeholder="bijv. 25,00" value="<?= h($variant['price_nl']) ?>">
                     </div>
                     <div class="field variant-price-eu" style="flex: 1 1 110px;">
@@ -318,8 +398,15 @@ require __DIR__ . '/../partials/layout-start.php';
             <label>Label</label>
             <input type="text" name="variant_label[]" placeholder="bijv. 1 kaart">
         </div>
+        <div class="field" style="flex: 1 1 130px;">
+            <label>Type</label>
+            <select name="variant_type[]" class="variant-type">
+                <option value="physical">Fysiek</option>
+                <option value="digital">Instant download</option>
+            </select>
+        </div>
         <div class="field" style="flex: 1 1 110px;">
-            <label>NL (€)</label>
+            <label class="variant-nl-label">NL (€)</label>
             <input type="text" name="variant_price_nl[]" placeholder="bijv. 25,00">
         </div>
         <div class="field variant-price-eu" style="flex: 1 1 110px;">
@@ -343,13 +430,19 @@ document.getElementById('add-variant').addEventListener('click', function () {
 function toggleZonePriceColumns() {
     const shipEu = document.getElementById('ship_eu').checked;
     const shipWorld = document.getElementById('ship_world').checked;
-    document.querySelectorAll('.variant-price-eu').forEach(function (el) {
-        el.style.display = shipEu ? '' : 'none';
-    });
-    document.querySelectorAll('.variant-price-world').forEach(function (el) {
-        el.style.display = shipWorld ? '' : 'none';
+    document.querySelectorAll('.variant-row').forEach(function (row) {
+        const isDigital = row.querySelector('.variant-type').value === 'digital';
+        row.querySelector('.variant-price-eu').style.display = shipEu && !isDigital ? '' : 'none';
+        row.querySelector('.variant-price-world').style.display = shipWorld && !isDigital ? '' : 'none';
+        row.querySelector('.variant-nl-label').textContent = isDigital ? 'Prijs (€)' : 'NL (€)';
     });
 }
+
+document.getElementById('variant-rows').addEventListener('change', function (e) {
+    if (e.target.classList.contains('variant-type')) {
+        toggleZonePriceColumns();
+    }
+});
 
 document.getElementById('ship_eu').addEventListener('change', toggleZonePriceColumns);
 document.getElementById('ship_world').addEventListener('change', toggleZonePriceColumns);

@@ -316,8 +316,8 @@ final class SpecialRepository
         $delete->execute([$specialId]);
 
         $insert = $pdo->prepare(
-            'INSERT INTO special_price_variants (special_id, label, price_nl_cents, price_eu_cents, price_world_cents, sort_order, active)
-             VALUES (?, ?, ?, ?, ?, ?, 1)'
+            'INSERT INTO special_price_variants (special_id, label, price_nl_cents, price_eu_cents, price_world_cents, sort_order, is_digital, active)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1)'
         );
 
         foreach (array_values($variants) as $sortOrder => $variant) {
@@ -328,6 +328,7 @@ final class SpecialRepository
                 $variant['price_eu_cents'],
                 $variant['price_world_cents'],
                 $sortOrder,
+                !empty($variant['is_digital']) ? 1 : 0,
             ]);
         }
     }

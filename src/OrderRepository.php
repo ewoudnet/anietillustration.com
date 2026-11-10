@@ -25,12 +25,16 @@ final class OrderRepository
         $unitPriceCents = $input['unitPriceCents'];
         $totalCents = $unitPriceCents * $input['quantity'];
 
+        $isDigital = !empty($variant['is_digital']);
+
         $id = $this->insertRow([
             'order_reference' => $this->generateUniqueReference(),
             'order_type' => 'special',
             'special_id' => $specialId,
             'price_variant_id' => $variant['id'],
             'variant_label' => $variant['label'],
+            'is_digital' => $isDigital ? 1 : 0,
+            'download_token' => $isDigital ? bin2hex(random_bytes(32)) : null,
             'first_name' => $input['firstName'],
             'last_name' => $input['lastName'],
             'street' => $input['street'],
@@ -128,6 +132,22 @@ final class OrderRepository
             'SELECT o.*, s.title AS special_title FROM orders o LEFT JOIN specials s ON s.id = o.special_id WHERE o.order_reference = :ref'
         );
         $stmt->execute(['ref' => $reference]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    public function findByDownloadToken(string $token): ?array
+    {
+        if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
+            return null;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT o.*, s.title AS special_title FROM orders o LEFT JOIN specials s ON s.id = o.special_id
+             WHERE o.download_token = :t AND o.is_digital = 1 AND o.deleted_at IS NULL'
+        );
+        $stmt->execute(['t' => $token]);
         $row = $stmt->fetch();
 
         return $row === false ? null : $row;

@@ -200,11 +200,11 @@ require __DIR__ . '/../partials/layout-start.php';
                     <tr>
                         <td><?= h($order['order_reference']) ?></td>
                         <td><?= h($order['special_title'] ?? '—') ?></td>
-                        <td><?= h($order['variant_label'] ?? '—') ?></td>
+                        <td><?= h($order['variant_label'] ?? '—') ?><?= !empty($order['is_digital']) ? ' <span class="badge badge-open">Download</span>' : '' ?></td>
                         <td><?= h((new DateTimeImmutable($order['created_at']))->format('d-m-Y H:i')) ?></td>
                         <td><?= h($order['first_name'] . ' ' . $order['last_name']) ?></td>
                         <td><?= h($order['email']) ?></td>
-                        <td><?= h($order['street'] . ' ' . $order['house_number'] . ', ' . $order['postal_code'] . ' ' . $order['city']) ?></td>
+                        <td><?= !empty($order['is_digital']) ? '— (digitaal)' : h($order['street'] . ' ' . $order['house_number'] . ', ' . $order['postal_code'] . ' ' . $order['city']) ?></td>
                         <td><?= (int) $order['quantity'] ?></td>
                         <td>€ <?= h(number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.')) ?></td>
                         <td><span class="badge <?= orderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span></td>

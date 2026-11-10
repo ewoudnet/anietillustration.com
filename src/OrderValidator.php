@@ -31,37 +31,6 @@ final class OrderValidator
         $quantityRaw = $input['quantity'] ?? '';
         $variantId = filter_var($input['price_variant_id'] ?? '', FILTER_VALIDATE_INT);
 
-        if ($firstName === '' || mb_strlen($firstName) > 100) {
-            $errors[] = 'Vul een geldige voornaam in.';
-        }
-        if ($lastName === '' || mb_strlen($lastName) > 100) {
-            $errors[] = 'Vul een geldige achternaam in.';
-        }
-        if ($street === '' || mb_strlen($street) > 150) {
-            $errors[] = 'Vul een geldige straatnaam in.';
-        }
-        if ($houseNumber === '' || mb_strlen($houseNumber) > 20) {
-            $errors[] = 'Vul een geldig huisnummer in.';
-        }
-        if ($postalCode === '' || mb_strlen($postalCode) > 20) {
-            $errors[] = 'Vul een geldige postcode in.';
-        }
-        if ($city === '' || mb_strlen($city) > 100) {
-            $errors[] = 'Vul een geldige plaats in.';
-        }
-        if (!Countries::isShippableFor($countryCode, $shipEu, $shipWorld)) {
-            $errors[] = 'We verzenden niet naar het gekozen land. Kies een geldig land.';
-        }
-        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
-            $errors[] = 'Vul een geldig e-mailadres in.';
-        }
-
-        $quantity = filter_var($quantityRaw, FILTER_VALIDATE_INT);
-        if ($quantity === false || $quantity < 1 || $quantity > self::MAX_QUANTITY) {
-            $errors[] = 'Kies een aantal tussen 1 en ' . self::MAX_QUANTITY . '.';
-            $quantity = 1;
-        }
-
         $selectedVariant = null;
         if ($variantId !== false) {
             foreach ($variants as $variant) {
@@ -76,12 +45,52 @@ final class OrderValidator
             $errors[] = 'Kies een geldige prijsvariant.';
         }
 
+        // Instant download: geen verzendadres, geen land (één prijs), altijd aantal 1.
+        $isDigital = $selectedVariant !== null && !empty($selectedVariant['is_digital']);
+
+        if ($firstName === '' || mb_strlen($firstName) > 100) {
+            $errors[] = 'Vul een geldige voornaam in.';
+        }
+        if ($lastName === '' || mb_strlen($lastName) > 100) {
+            $errors[] = 'Vul een geldige achternaam in.';
+        }
+        if ($isDigital) {
+            $street = $houseNumber = $postalCode = $city = '';
+            $countryCode = 'NL';
+        } else {
+            if ($street === '' || mb_strlen($street) > 150) {
+                $errors[] = 'Vul een geldige straatnaam in.';
+            }
+            if ($houseNumber === '' || mb_strlen($houseNumber) > 20) {
+                $errors[] = 'Vul een geldig huisnummer in.';
+            }
+            if ($postalCode === '' || mb_strlen($postalCode) > 20) {
+                $errors[] = 'Vul een geldige postcode in.';
+            }
+            if ($city === '' || mb_strlen($city) > 100) {
+                $errors[] = 'Vul een geldige plaats in.';
+            }
+            if (!Countries::isShippableFor($countryCode, $shipEu, $shipWorld)) {
+                $errors[] = 'We verzenden niet naar het gekozen land. Kies een geldig land.';
+            }
+        }
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
+            $errors[] = 'Vul een geldig e-mailadres in.';
+        }
+
+        $quantity = $isDigital ? 1 : filter_var($quantityRaw, FILTER_VALIDATE_INT);
+        if (!$isDigital && ($quantity === false || $quantity < 1 || $quantity > self::MAX_QUANTITY)) {
+            $errors[] = 'Kies een aantal tussen 1 en ' . self::MAX_QUANTITY . '.';
+            $quantity = 1;
+        }
+
         $unitPriceCents = null;
         if ($selectedVariant !== null && Countries::isValid($countryCode)) {
             $zone = Countries::zoneFor($countryCode);
-            $priceColumn = match ($zone) {
-                'nl' => 'price_nl_cents',
-                'eu' => 'price_eu_cents',
+            $priceColumn = match (true) {
+                $isDigital => 'price_nl_cents', // digitaal: één prijs voor iedereen
+                $zone === 'nl' => 'price_nl_cents',
+                $zone === 'eu' => 'price_eu_cents',
                 default => 'price_world_cents',
             };
             $unitPriceCents = $selectedVariant[$priceColumn] ?? null;

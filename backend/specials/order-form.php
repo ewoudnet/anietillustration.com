@@ -54,6 +54,7 @@ $formData = [
 ];
 
 $errors = [];
+$isDigitalOrder = !empty($order['is_digital']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!Csrf::verify($_POST['csrf_token'] ?? null)) {
@@ -75,6 +76,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formData['status'] = trim((string) ($_POST['status'] ?? ''));
     $formData['notes'] = trim((string) ($_POST['notes'] ?? ''));
 
+    if ($isDigitalOrder) {
+        // Adresvelden zijn uitgeschakeld in het formulier: bewaar de bestaande (lege) waarden.
+        foreach (['street', 'house_number', 'postal_code', 'city', 'country_code'] as $addressField) {
+            $formData[$addressField] = (string) $order[$addressField];
+        }
+    }
+
     if ($formData['first_name'] === '' || mb_strlen($formData['first_name']) > 100) {
         $errors[] = 'Vul een geldige voornaam in.';
     }
@@ -84,19 +92,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($formData['email'] === '' || !filter_var($formData['email'], FILTER_VALIDATE_EMAIL) || mb_strlen($formData['email']) > 190) {
         $errors[] = 'Vul een geldig e-mailadres in.';
     }
-    if ($formData['street'] === '' || mb_strlen($formData['street']) > 150) {
+    if (!$isDigitalOrder && ($formData['street'] === '' || mb_strlen($formData['street']) > 150)) {
         $errors[] = 'Vul een geldige straatnaam in.';
     }
-    if ($formData['house_number'] === '' || mb_strlen($formData['house_number']) > 20) {
+    if (!$isDigitalOrder && ($formData['house_number'] === '' || mb_strlen($formData['house_number']) > 20)) {
         $errors[] = 'Vul een geldig huisnummer in.';
     }
-    if ($formData['postal_code'] === '' || mb_strlen($formData['postal_code']) > 20) {
+    if (!$isDigitalOrder && ($formData['postal_code'] === '' || mb_strlen($formData['postal_code']) > 20)) {
         $errors[] = 'Vul een geldige postcode in.';
     }
-    if ($formData['city'] === '' || mb_strlen($formData['city']) > 100) {
+    if (!$isDigitalOrder && ($formData['city'] === '' || mb_strlen($formData['city']) > 100)) {
         $errors[] = 'Vul een geldige plaats in.';
     }
-    if (!Countries::isValid($formData['country_code'])) {
+    if (!$isDigitalOrder && !Countries::isValid($formData['country_code'])) {
         $errors[] = 'Kies een geldig land.';
     }
     if (!array_key_exists($formData['status'], $statusLabels)) {
@@ -197,6 +205,10 @@ require __DIR__ . '/../partials/layout-start.php';
         </div>
 
         <h3>Verzendadres</h3>
+        <?php if ($isDigitalOrder): ?>
+            <p class="hint">Instant download-bestelling: geen verzendadres nodig.</p>
+        <?php endif; ?>
+        <fieldset style="border: 0; padding: 0; margin: 0;"<?= $isDigitalOrder ? ' disabled hidden' : '' ?>>
         <div class="row">
             <div class="field" style="flex: 2 1 220px;">
                 <label for="street">Straatnaam</label>
@@ -225,6 +237,7 @@ require __DIR__ . '/../partials/layout-start.php';
                 <?php endforeach; ?>
             </select>
         </div>
+        </fieldset>
 
         <h3>Bestelling &amp; betaling</h3>
         <div class="row">

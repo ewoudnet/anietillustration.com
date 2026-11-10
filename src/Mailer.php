@@ -33,11 +33,19 @@ final class Mailer
         $mail->addAddress($order['email'], $order['first_name'] . ' ' . $order['last_name']);
 
         $mail->isHTML(true);
-        $mail->Subject = 'Bevestiging van je bestelling ' . $order['order_reference'];
+        $mail->Subject = (!empty($order['is_digital']) ? 'Je download van bestelling ' : 'Bevestiging van je bestelling ') . $order['order_reference'];
         $mail->Body = self::renderHtml($order);
         $mail->AltBody = self::renderText($order);
 
         $mail->send();
+    }
+
+    /**
+     * @param array<string,mixed> $order
+     */
+    public static function downloadUrl(array $order): string
+    {
+        return Config::appUrl() . '/download.php?t=' . urlencode((string) $order['download_token']);
     }
 
     /**
@@ -51,11 +59,26 @@ final class Mailer
         $firstName = htmlspecialchars((string) $order['first_name'], ENT_QUOTES, 'UTF-8');
         $quantity = (int) $order['quantity'];
         $total = number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.');
+        $isDigital = !empty($order['is_digital']);
         $address = htmlspecialchars(
             sprintf('%s %s, %s %s, %s', $order['street'], $order['house_number'], $order['postal_code'], $order['city'], Countries::ALL[$order['country_code']] ?? $order['country_code']),
             ENT_QUOTES,
             'UTF-8'
         );
+        $lastRow = $isDigital
+            ? ''
+            : "<tr style=\"background: #ffbadd33;\"><td style=\"padding: 8px 12px;\"><strong>Verzendadres</strong></td><td style=\"padding: 8px 12px;\">{$address}</td></tr>";
+        $downloadBlock = '';
+        if ($isDigital) {
+            $url = htmlspecialchars(self::downloadUrl($order), ENT_QUOTES, 'UTF-8');
+            $downloadBlock = <<<HTML
+                <p style="text-align: center; margin: 24px 0;">
+                    <a href="{$url}" style="background: #c13873; color: #ffffff; text-decoration: none; padding: 12px 26px; border-radius: 999px; font-weight: bold; display: inline-block;">Download je bestand(en)</a>
+                </p>
+                <p style="font-size: 13px;">Werkt de knop niet? Kopieer deze link in je browser:<br>{$url}</p>
+                <p style="font-size: 13px;">Bewaar deze mail goed: de link is persoonlijk en blijft werken, zodat je de bestanden later opnieuw kunt downloaden.</p>
+            HTML;
+        }
 
         return <<<HTML
             <div style="font-family: Arial, sans-serif; color: #012b55; max-width: 560px; margin: 0 auto; background: #fff6fb; border-radius: 14px; padding: 28px;">
@@ -65,8 +88,9 @@ final class Mailer
                     <tr><td style="padding: 8px 12px;"><strong>Bestelnummer</strong></td><td style="padding: 8px 12px;">{$reference}</td></tr>
                     <tr style="background: #ffbadd33;"><td style="padding: 8px 12px;"><strong>Bestelling</strong></td><td style="padding: 8px 12px;">{$variantLabel} x {$quantity}</td></tr>
                     <tr><td style="padding: 8px 12px;"><strong>Totaal betaald</strong></td><td style="padding: 8px 12px;">€ {$total}</td></tr>
-                    <tr style="background: #ffbadd33;"><td style="padding: 8px 12px;"><strong>Verzendadres</strong></td><td style="padding: 8px 12px;">{$address}</td></tr>
+                    {$lastRow}
                 </table>
+                {$downloadBlock}
                 <p>Ik hoor het graag als je nog vragen hebt!</p>
                 <p>Nogmaals hartstikke bedankt voor je support!</p>
                 <p>Een hele fijne dag,<br>Met vriendelijke groet,<br>Anita</p>
@@ -86,9 +110,13 @@ final class Mailer
         $specialTitle = (string) ($order['special_title'] ?? 'Special');
         $total = number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.');
 
+        $downloadText = !empty($order['is_digital'])
+            ? "Download je bestand(en) via deze persoonlijke link (bewaar deze mail goed):\n" . self::downloadUrl($order) . "\n\n"
+            : '';
+
         return sprintf(
             "Hartstikke bedankt voor je bestelling bij \"%s\" van Aniet Illustration.\n\n" .
-            "Bestelnummer: %s\nBestelling: %s x %d\nTotaal betaald: EUR %s\n\n" .
+            "Bestelnummer: %s\nBestelling: %s x %d\nTotaal betaald: EUR %s\n\n" . $downloadText .
             "Ik hoor het graag als je nog vragen hebt!\n\n" .
             "Nogmaals hartstikke bedankt voor je support!\n\n" .
             "Een hele fijne dag,\nMet vriendelijke groet,\nAnita\n\n" .

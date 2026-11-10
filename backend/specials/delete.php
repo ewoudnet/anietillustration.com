@@ -24,6 +24,7 @@ if ($id > 0) {
 
     if ($special !== null) {
         ImageUpload::delete($special['banner_path'], SPECIALS_ASSETS_PATH);
+        (new \App\SpecialDownloadRepository())->deleteFilesForSpecial($id);
         $repository->delete($id);
     }
 }
