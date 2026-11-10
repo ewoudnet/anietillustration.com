@@ -49,6 +49,7 @@ lopende specials met daaronder de verlopen specials.
   filtert op `sold_out = 0`). Onafhankelijk van `active` te zetten, quick-
   toggle in het backend-overzicht en checkbox in het bewerkformulier.
 - [x] Directe link vanuit het bewerkformulier naar de publieke special-pagina
+- [x] Rich-text editor voor de special-tekst (vet/cursief/onderstreept, kop, lijsten, links) in het backend-formulier; opgeslagen als HTML, opgeschoond met allow-list (`src/HtmlSanitizer.php`) bij opslaan én tonen. Bestaande platte teksten blijven werken (regeleinden behouden).
 - [x] Instant download: prijsvariant met type "Instant download" (één prijs, geen
   adres/land/aantal). Bestanden hangen aan de special (`special_downloads`), worden
   na betaling via een persoonlijke link (`specials/download.php?t={token}`) in de

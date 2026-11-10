@@ -7,6 +7,7 @@ require __DIR__ . '/../bootstrap.php';
 use App\Auth;
 use App\Config;
 use App\Csrf;
+use App\HtmlSanitizer;
 use App\ImageUpload;
 use App\SpecialDownloadRepository;
 use App\SpecialRepository;
@@ -68,7 +69,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $formData['title'] = trim((string) ($_POST['title'] ?? ''));
     $formData['slug'] = SpecialRepository::slugify((string) ($_POST['slug'] ?? ''));
-    $formData['description'] = trim((string) ($_POST['description'] ?? ''));
+    $formData['description'] = HtmlSanitizer::clean((string) ($_POST['description'] ?? ''));
+    if (HtmlSanitizer::isEmpty($formData['description'])) {
+        $formData['description'] = '';
+    }
     $formData['active'] = isset($_POST['active']) ? 1 : 0;
     $formData['sold_out'] = isset($_POST['sold_out']) ? 1 : 0;
     $formData['ship_eu'] = isset($_POST['ship_eu']) ? 1 : 0;
@@ -286,8 +290,26 @@ require __DIR__ . '/../partials/layout-start.php';
         </div>
 
         <div class="field">
-            <label for="description">Tekst / introductie</label>
-            <textarea id="description" name="description" rows="4"><?= h($formData['description'] ?? '') ?></textarea>
+            <label for="description-editor">Tekst / introductie</label>
+            <div class="rte" id="rte">
+                <div class="rte-toolbar" role="toolbar" aria-label="Tekstopmaak">
+                    <button type="button" data-cmd="bold" title="Vet"><b>B</b></button>
+                    <button type="button" data-cmd="italic" title="Cursief"><i>I</i></button>
+                    <button type="button" data-cmd="underline" title="Onderstreept"><u>U</u></button>
+                    <span class="rte-sep"></span>
+                    <button type="button" data-cmd="formatBlock" data-value="h3" title="Kop">Kop</button>
+                    <button type="button" data-cmd="formatBlock" data-value="p" title="Gewone tekst">Tekst</button>
+                    <span class="rte-sep"></span>
+                    <button type="button" data-cmd="insertUnorderedList" title="Opsomming">• Lijst</button>
+                    <button type="button" data-cmd="insertOrderedList" title="Genummerde lijst">1. Lijst</button>
+                    <span class="rte-sep"></span>
+                    <button type="button" data-cmd="link" title="Link toevoegen">Link</button>
+                    <button type="button" data-cmd="unlink" title="Link verwijderen">Link &times;</button>
+                    <button type="button" data-cmd="removeFormat" title="Opmaak wissen">Wis opmaak</button>
+                </div>
+                <div class="rte-area" id="description-editor" contenteditable="true"><?= HtmlSanitizer::render($formData['description'] ?? '') ?></div>
+            </div>
+            <textarea id="description" name="description" hidden><?= h(HtmlSanitizer::render($formData['description'] ?? '')) ?></textarea>
         </div>
 
         <div class="field">
@@ -447,6 +469,39 @@ document.getElementById('variant-rows').addEventListener('change', function (e) 
 document.getElementById('ship_eu').addEventListener('change', toggleZonePriceColumns);
 document.getElementById('ship_world').addEventListener('change', toggleZonePriceColumns);
 toggleZonePriceColumns();
+
+(function () {
+    const editor = document.getElementById('description-editor');
+    const field = document.getElementById('description');
+
+    document.getElementById('rte').querySelectorAll('[data-cmd]').forEach(function (btn) {
+        btn.addEventListener('mousedown', function (e) { e.preventDefault(); }); // behoud selectie
+        btn.addEventListener('click', function () {
+            editor.focus();
+            const cmd = btn.dataset.cmd;
+            if (cmd === 'link') {
+                const url = window.prompt('Link-adres (bijv. https://www.anietillustration.com):', 'https://');
+                if (url && /^(https?:\/\/|mailto:)/i.test(url.trim())) {
+                    document.execCommand('createLink', false, url.trim());
+                }
+            } else if (cmd === 'formatBlock') {
+                document.execCommand('formatBlock', false, btn.dataset.value);
+            } else {
+                document.execCommand(cmd, false, null);
+            }
+        });
+    });
+
+    // Plakken als platte tekst, zodat er geen rommelige opmaak uit Word/websites meekomt.
+    editor.addEventListener('paste', function (e) {
+        e.preventDefault();
+        document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain'));
+    });
+
+    editor.closest('form').addEventListener('submit', function () {
+        field.value = editor.innerHTML;
+    });
+})();
 
 (function () {
     const titleField = document.getElementById('title');

@@ -6,6 +6,7 @@ require __DIR__ . '/bootstrap.php';
 
 use App\Countries;
 use App\Csrf;
+use App\HtmlSanitizer;
 use App\PageViewRepository;
 use App\SpecialRepository;
 use App\TrafficSource;
@@ -92,7 +93,7 @@ function specialUrl(array $item): string
         <div class="intro-card">
             <h2><?= h($special['title']) ?></h2>
             <?php if ($special['description']): ?>
-                <p><?= nl2br(h($special['description'])) ?></p>
+                <div class="intro-text"><?= HtmlSanitizer::render($special['description']) ?></div>
             <?php endif; ?>
         </div>
 

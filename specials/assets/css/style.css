@@ -86,6 +86,32 @@ h1, h2, h3, legend {
     margin-bottom: 0;
 }
 
+.intro-text > :last-child {
+    margin-bottom: 0;
+}
+
+.intro-text h3,
+.intro-text h4 {
+    margin: 18px 0 8px;
+    color: var(--color-accent-dark);
+}
+
+.intro-text ul,
+.intro-text ol {
+    margin: 0 0 14px;
+    padding-left: 22px;
+}
+
+.intro-text blockquote {
+    margin: 0 0 14px;
+    padding-left: 14px;
+    border-left: 3px solid var(--color-accent);
+}
+
+.intro-text a {
+    color: var(--color-accent-dark);
+}
+
 .card {
     background: var(--color-card);
     border-radius: var(--radius);
