@@ -5,9 +5,8 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 
 use App\Auth;
-use App\AdventOrderRepository;
 use App\Csrf;
-use App\OrderRepository;
+use App\OrderListService;
 use App\SpecialRepository;
 
 Auth::requireSection('specials');
@@ -21,24 +20,15 @@ $filters = [
 ];
 $hasFilters = (bool) array_filter($filters);
 
-$orderRepository = new OrderRepository();
-$orders = $hasFilters ? $orderRepository->search($filters) : $orderRepository->findAll();
+// Eén samengevoegde lijst (nieuw + oud advent); tellers, tabel en export gebruiken exact deze lijst.
+$orders = OrderListService::fetch($filters);
 $specials = (new SpecialRepository())->findAll();
-$adventOrders = (new AdventOrderRepository())->findAll();
-
-$adventTypeLabels = [
-    'advent' => 'Adventkalender',
-    'kalender2027' => 'Kalender 2027',
-];
 
 $totalOrders = count($orders);
 $paidOrders = array_filter($orders, static fn (array $o) => $o['status'] === 'paid');
 $paidCount = count($paidOrders);
 $paidRevenueCents = array_sum(array_map(static fn (array $o) => (int) $o['total_amount_cents'], $paidOrders));
-
-$paidAdventOrders = array_filter($adventOrders, static fn (array $o) => $o['status'] === 'paid');
-$paidCalendarQuantity = array_sum(array_map(static fn (array $o) => (int) $o['quantity'], $paidOrders))
-    + array_sum(array_map(static fn (array $o) => (int) $o['quantity'], $paidAdventOrders));
+$paidQuantity = array_sum(array_map(static fn (array $o) => (int) $o['quantity'], $paidOrders));
 
 $statusLabels = [
     'open' => 'Open',
@@ -97,7 +87,6 @@ function renderOrdersPagination(string $pageParam, int $currentPage, int $totalP
 }
 
 [$pagedOrders, $ordersPage, $ordersTotalPages] = paginate($orders, 'page');
-[$pagedAdventOrders, $adventPage, $adventTotalPages] = paginate($adventOrders, 'advent_page');
 
 $exportQuery = http_build_query($filters);
 
@@ -140,6 +129,9 @@ require __DIR__ . '/../partials/layout-start.php';
                     <?php foreach ($specials as $special): ?>
                         <option value="<?= (int) $special['id'] ?>" <?= $filters['special_id'] === (string) $special['id'] ? 'selected' : '' ?>><?= h($special['title']) ?></option>
                     <?php endforeach; ?>
+                    <?php foreach (OrderListService::LEGACY_TYPE_LABELS as $type => $label): ?>
+                        <option value="legacy:<?= h($type) ?>" <?= $filters['special_id'] === 'legacy:' . $type ? 'selected' : '' ?>><?= h($label) ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="field" style="flex: 0 0 auto;">
@@ -157,7 +149,7 @@ require __DIR__ . '/../partials/layout-start.php';
 <div class="row" style="margin: 18px 0;">
     <div class="card" style="flex: 1 1 160px; text-align: center;">
         <div style="font-size: 1.5rem; font-weight: 700;"><?= $totalOrders ?></div>
-        <div>Getoond (na filters)</div>
+        <div>Bestellingen</div>
     </div>
     <div class="card" style="flex: 1 1 160px; text-align: center;">
         <div style="font-size: 1.5rem; font-weight: 700;"><?= $paidCount ?></div>
@@ -165,11 +157,11 @@ require __DIR__ . '/../partials/layout-start.php';
     </div>
     <div class="card" style="flex: 1 1 160px; text-align: center;">
         <div style="font-size: 1.5rem; font-weight: 700;">€ <?= h(number_format($paidRevenueCents / 100, 2, ',', '.')) ?></div>
-        <div>Omzet (betaald, getoond)</div>
+        <div>Omzet (betaald)</div>
     </div>
     <div class="card" style="flex: 1 1 160px; text-align: center;">
-        <div style="font-size: 1.5rem; font-weight: 700;"><?= $paidCalendarQuantity ?></div>
-        <div>Aantal kalenders besteld (betaald, nieuw + oud)</div>
+        <div style="font-size: 1.5rem; font-weight: 700;"><?= $paidQuantity ?></div>
+        <div>Stuks besteld (betaald)</div>
     </div>
 </div>
 
@@ -178,43 +170,47 @@ require __DIR__ . '/../partials/layout-start.php';
         <p><?= $hasFilters ? 'Geen bestellingen gevonden voor deze filters.' : 'Er zijn nog geen bestellingen.' ?></p>
     <?php else: ?>
         <div class="table-wrapper">
-            <table>
+            <table class="orders-table">
                 <thead>
                 <tr>
                     <th>Referentie</th>
-                    <th>Special</th>
-                    <th>Variant</th>
                     <th>Datum</th>
-                    <th>Naam</th>
-                    <th>E-mail</th>
-                    <th>Adres</th>
+                    <th>Klant</th>
+                    <th>Special</th>
                     <th>Aantal</th>
                     <th>Totaal</th>
                     <th>Status</th>
-                    <th>Mail verzonden</th>
-                    <th>Downloads</th>
                     <th>Acties</th>
                 </tr>
                 </thead>
                 <tbody>
                 <?php foreach ($pagedOrders as $order): ?>
+                    <?php $isLegacy = !empty($order['is_legacy']); ?>
                     <tr>
                         <td><?= h($order['order_reference']) ?></td>
-                        <td><?= h($order['special_title'] ?? '—') ?></td>
-                        <td><?= h($order['variant_label'] ?? '—') ?><?= !empty($order['is_digital']) ? ' <span class="badge badge-open">Download</span>' : '' ?></td>
                         <td><?= h((new DateTimeImmutable($order['created_at']))->format('d-m-Y H:i')) ?></td>
-                        <td><?= h($order['first_name'] . ' ' . $order['last_name']) ?></td>
-                        <td><?= h($order['email']) ?></td>
-                        <td><?= !empty($order['is_digital']) ? '— (digitaal)' : h($order['street'] . ' ' . $order['house_number'] . ', ' . $order['postal_code'] . ' ' . $order['city']) ?></td>
+                        <td class="wrap">
+                            <?= h($order['first_name'] . ' ' . $order['last_name']) ?><br>
+                            <small><?= h($order['email']) ?><?= !empty($order['is_digital']) || $order['city'] === '' ? '' : ' · ' . h($order['city']) ?></small>
+                        </td>
+                        <td class="wrap">
+                            <?= h($order['special_title'] ?? '—') ?>
+                            <?php if (!empty($order['variant_label'])): ?><br><small><?= h($order['variant_label']) ?></small><?php endif; ?>
+                            <?php if (!empty($order['is_digital'])): ?>
+                                <?php $dl = (int) $order['download_count']; ?>
+                                <br><small<?= $dl >= 10 ? ' style="color:#c0392b;font-weight:700"' : '' ?> title="<?= $order['last_downloaded_at'] !== null ? h('Laatste download: ' . (new DateTimeImmutable($order['last_downloaded_at']))->format('d-m-Y H:i')) : 'Nog niet gedownload' ?>">⬇ Download · <?= $dl ?>× opgehaald<?= $dl >= 10 ? ' ⚠️' : '' ?></small>
+                            <?php endif; ?>
+                        </td>
                         <td><?= (int) $order['quantity'] ?></td>
                         <td>€ <?= h(number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.')) ?></td>
-                        <td><span class="badge <?= orderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span></td>
-                        <td><?= $order['confirmation_email_sent_at'] !== null ? '✅' : '—' ?></td>
-                        <td><?php if (!empty($order['is_digital'])): ?>
-                            <?php $dl = (int) $order['download_count']; ?>
-                            <span title="<?= $order['last_downloaded_at'] !== null ? h('Laatst: ' . (new DateTimeImmutable($order['last_downloaded_at']))->format('d-m-Y H:i')) : '' ?>"<?= $dl >= 10 ? ' style="color:#c0392b;font-weight:700"' : '' ?>><?= $dl ?><?= $dl >= 10 ? ' ⚠️' : '' ?></span>
-                        <?php else: ?>—<?php endif; ?></td>
                         <td>
+                            <span class="badge <?= orderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span>
+                            <?php if ($order['confirmation_email_sent_at'] !== null): ?><span title="Bevestigingsmail verzonden">✉️</span><?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($isLegacy): ?>
+                                <small title="Beheer in het oude advent-systeem">oud systeem</small>
+                            <?php else: ?>
                             <div class="actions-dropdown">
                                 <button type="button" class="icon-btn actions-trigger" title="Acties" aria-label="Acties">⋮</button>
                                 <div class="actions-menu">
@@ -227,6 +223,7 @@ require __DIR__ . '/../partials/layout-start.php';
                                     </form>
                                 </div>
                             </div>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -234,53 +231,6 @@ require __DIR__ . '/../partials/layout-start.php';
             </table>
         </div>
         <?php renderOrdersPagination('page', $ordersPage, $ordersTotalPages); ?>
-    <?php endif; ?>
-</div>
-
-<div class="page-header" style="margin-top: 32px;">
-    <h1>Advent bestellingen (bestaand systeem)</h1>
-</div>
-<p>Bestellingen uit het losse, nog operationele <code>adventskaarten-bestellen</code>-project — alleen ter inzage, beheer hiervan blijft in de eigen admin van dat project.</p>
-
-<div class="card">
-    <?php if (count($adventOrders) === 0): ?>
-        <p>Er zijn nog geen advent bestellingen.</p>
-    <?php else: ?>
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                <tr>
-                    <th>Referentie</th>
-                    <th>Type</th>
-                    <th>Datum</th>
-                    <th>Naam</th>
-                    <th>E-mail</th>
-                    <th>Adres</th>
-                    <th>Aantal</th>
-                    <th>Totaal</th>
-                    <th>Status</th>
-                    <th>Mail verzonden</th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($pagedAdventOrders as $order): ?>
-                    <tr>
-                        <td><?= h($order['order_reference']) ?></td>
-                        <td><?= h($adventTypeLabels[$order['product_type']] ?? ucfirst($order['product_type'])) ?></td>
-                        <td><?= h((new DateTimeImmutable($order['created_at']))->format('d-m-Y H:i')) ?></td>
-                        <td><?= h($order['first_name'] . ' ' . $order['last_name']) ?></td>
-                        <td><?= h($order['email']) ?></td>
-                        <td><?= h($order['street'] . ' ' . $order['house_number'] . ', ' . $order['postal_code'] . ' ' . $order['city']) ?></td>
-                        <td><?= (int) $order['quantity'] ?></td>
-                        <td>€ <?= h(number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.')) ?></td>
-                        <td><span class="badge <?= orderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span></td>
-                        <td><?= $order['confirmation_email_sent_at'] !== null ? '✅' : '—' ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <?php renderOrdersPagination('advent_page', $adventPage, $adventTotalPages); ?>
     <?php endif; ?>
 </div>
 <?php require __DIR__ . '/../partials/layout-end.php'; ?>

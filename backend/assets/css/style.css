@@ -723,3 +723,8 @@ a.stat-tile-link:focus-visible {
 .rte-area h3 { margin: 12px 0 6px; }
 .rte-area p { margin: 0 0 10px; }
 .rte-area a { color: var(--color-accent-dark); }
+
+/* Bestellijst: klant/special mogen afbreken zodat de tabel zonder scrollen past */
+.orders-table td.wrap { white-space: normal; min-width: 150px; max-width: 280px; }
+.orders-table td small { color: var(--color-muted); }
+.card { min-width: 0; }
