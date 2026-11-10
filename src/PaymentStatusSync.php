@@ -35,12 +35,16 @@ final class PaymentStatusSync
         }
 
         if ($status === 'paid' && $order['confirmation_email_sent_at'] === null) {
-            try {
-                Mailer::sendOrderConfirmation($order);
-                $orderRepository->markConfirmationEmailSent((int) $order['id']);
+            // Webhook en bedankpagina lopen tegelijk binnen; alleen wie de claim wint verstuurt.
+            if ($orderRepository->claimConfirmationEmail((int) $order['id'])) {
                 $order['confirmation_email_sent_at'] = date('Y-m-d H:i:s');
-            } catch (\Throwable $mailError) {
-                error_log('Bevestigingsmail versturen mislukt voor order ' . $order['order_reference'] . ': ' . $mailError->getMessage());
+                try {
+                    Mailer::sendOrderConfirmation($order);
+                } catch (\Throwable $mailError) {
+                    $orderRepository->releaseConfirmationEmail((int) $order['id']);
+                    $order['confirmation_email_sent_at'] = null;
+                    error_log('Bevestigingsmail versturen mislukt voor order ' . $order['order_reference'] . ': ' . $mailError->getMessage());
+                }
             }
         }
 

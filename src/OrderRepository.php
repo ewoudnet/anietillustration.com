@@ -182,6 +182,24 @@ final class OrderRepository
         $stmt->execute(['status' => $status, 'id' => $orderId]);
     }
 
+    /**
+     * Atomair "claimen" van het versturen van de bevestigingsmail: slechts één van meerdere
+     * gelijktijdige aanroepen (webhook + bedankpagina) krijgt true en mag mailen.
+     */
+    public function claimConfirmationEmail(int $orderId): bool
+    {
+        $stmt = $this->db->prepare('UPDATE orders SET confirmation_email_sent_at = NOW() WHERE id = :id AND confirmation_email_sent_at IS NULL');
+        $stmt->execute(['id' => $orderId]);
+
+        return $stmt->rowCount() === 1;
+    }
+
+    public function releaseConfirmationEmail(int $orderId): void
+    {
+        $stmt = $this->db->prepare('UPDATE orders SET confirmation_email_sent_at = NULL WHERE id = :id');
+        $stmt->execute(['id' => $orderId]);
+    }
+
     public function markConfirmationEmailSent(int $orderId): void
     {
         $stmt = $this->db->prepare('UPDATE orders SET confirmation_email_sent_at = NOW() WHERE id = :id');
