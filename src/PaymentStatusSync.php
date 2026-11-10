@@ -40,6 +40,7 @@ final class PaymentStatusSync
                 $order['confirmation_email_sent_at'] = date('Y-m-d H:i:s');
                 try {
                     Mailer::sendOrderConfirmation($order);
+                    self::notifyOwner($order);
                 } catch (\Throwable $mailError) {
                     $orderRepository->releaseConfirmationEmail((int) $order['id']);
                     $order['confirmation_email_sent_at'] = null;
@@ -49,5 +50,23 @@ final class PaymentStatusSync
         }
 
         return $order;
+    }
+
+    /**
+     * Meldt de eigenaar een nieuwe (betaalde) bestelling, als dat in Settings aan staat. Een
+     * fout hier mag de klantmail/orderverwerking nooit raken.
+     *
+     * @param array<string,mixed> $order
+     */
+    private static function notifyOwner(array $order): void
+    {
+        try {
+            $to = SettingsRepository::newOrderNotificationEmail();
+            if (SettingsRepository::newOrderNotificationEnabled() && filter_var($to, FILTER_VALIDATE_EMAIL)) {
+                Mailer::sendNewOrderNotification($order, $to);
+            }
+        } catch (\Throwable $e) {
+            error_log('Melding nieuwe bestelling mislukt voor order ' . $order['order_reference'] . ': ' . $e->getMessage());
+        }
     }
 }

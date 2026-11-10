@@ -70,3 +70,10 @@ foutafhandeling vangt dit netjes op) → order zichtbaar + filterbaar in
   via de bestaande `Database`-connectie. Schrijven blijft voorbehouden aan
   het bestaande advent-systeem (zie CLAUDE.md).
   **Datum:** 2026-08-06
+
+## Melding nieuwe bestelling (2026-11)
+- Bij een betaalde order mailt `PaymentStatusSync` (binnen dezelfde atomaire claim als de klantmail, dus
+  één keer per order) de eigenaar: special, variant, aantal, totaal, naam, e-mail, adres/levering.
+- Aan/uit + ontvanger in de backend: Settings -> Meldingen (`backend/settings/notifications.php`,
+  opslag in `app_settings`, migratie `sql/migrations/014_app_settings.sql`). Default: aan, naar
+  `MAIL_FROM_ADDRESS`. Een fout in de melding raakt de klantmail nooit.

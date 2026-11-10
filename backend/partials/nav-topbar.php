@@ -75,6 +75,7 @@ $sectionEntryPages = [
         <a href="<?= h(BACKEND_BASE) ?>/settings/users.php" class="<?= $activePage === 'users' ? 'active' : '' ?>">Gebruikers</a>
         <a href="<?= h(BACKEND_BASE) ?>/settings/product-types.php" class="<?= $activePage === 'product-types' ? 'active' : '' ?>">Producttypes</a>
         <a href="<?= h(BACKEND_BASE) ?>/settings/sales-channels.php" class="<?= $activePage === 'sales-channels' ? 'active' : '' ?>">Sale channels</a>
+        <a href="<?= h(BACKEND_BASE) ?>/settings/notifications.php" class="<?= $activePage === 'notifications' ? 'active' : '' ?>">Meldingen</a>
         <a href="<?= h(BACKEND_BASE) ?>/settings/backup.php" class="<?= $activePage === 'backup' ? 'active' : '' ?>">Backup</a>
         <?php /* 'Faire sync' hier bewust weggelaten (2026-08-20, gebruikersverzoek, zelfde
         aanpak als de Wholesale-menuknop hierboven): de pagina en code blijven intact, alleen

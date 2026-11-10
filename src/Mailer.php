@@ -15,6 +15,60 @@ final class Mailer
      */
     public static function sendOrderConfirmation(array $order): void
     {
+        $mail = self::newMailer();
+        $mail->addAddress($order['email'], $order['first_name'] . ' ' . $order['last_name']);
+
+        $mail->isHTML(true);
+        $mail->Subject = (!empty($order['is_digital']) ? 'Je download van bestelling ' : 'Bevestiging van je bestelling ') . $order['order_reference'];
+        $mail->Body = self::renderHtml($order);
+        $mail->AltBody = self::renderText($order);
+
+        $mail->send();
+    }
+
+    /**
+     * Interne melding naar de eigenaar: wat er besteld is en door wie.
+     *
+     * @param array<string,mixed> $order
+     * @throws PHPMailerException
+     */
+    public static function sendNewOrderNotification(array $order, string $to): void
+    {
+        $mail = self::newMailer();
+        $mail->addAddress($to);
+        $mail->addReplyTo((string) $order['email'], $order['first_name'] . ' ' . $order['last_name']);
+
+        $isDigital = !empty($order['is_digital']);
+        $total = number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.');
+        $what = sprintf('%s - %s x %d', $order['special_title'] ?? 'Special', $order['variant_label'] ?? '', (int) $order['quantity']);
+        $who = $order['first_name'] . ' ' . $order['last_name'];
+        $where = $isDigital
+            ? 'Instant download (geen verzending)'
+            : sprintf('%s %s, %s %s, %s', $order['street'], $order['house_number'], $order['postal_code'], $order['city'], Countries::ALL[$order['country_code']] ?? $order['country_code']);
+
+        $mail->Subject = sprintf('Nieuwe bestelling: %s - %s (%s)', $order['special_title'] ?? 'Special', $who, $order['order_reference']);
+        $mail->AltBody = "Nieuwe bestelling {$order['order_reference']}\n\nWat: {$what}\nTotaal: EUR {$total}\nWie: {$who} <{$order['email']}>\nAdres: {$where}\n";
+
+        $rows = [
+            'Bestelnummer' => $order['order_reference'],
+            'Wat' => $what,
+            'Totaal betaald' => '€ ' . $total,
+            'Wie' => $who . ' <' . $order['email'] . '>',
+            $isDigital ? 'Levering' : 'Verzendadres' => $where,
+        ];
+        $html = '<div style="font-family: Arial, sans-serif; color: #012b55; max-width: 560px;"><h2 style="color: #c13873; margin-top: 0;">Nieuwe bestelling 🎉</h2><table style="border-collapse: collapse; width: 100%;">';
+        foreach ($rows as $label => $value) {
+            $html .= '<tr><td style="padding: 6px 12px 6px 0; vertical-align: top;"><strong>' . htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') . '</strong></td><td style="padding: 6px 0;">' . htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8') . '</td></tr>';
+        }
+        $html .= '</table><p style="font-size: 12px; color: #597188;">Deze melding kun je aan/uit zetten bij Settings &rarr; Meldingen.</p></div>';
+
+        $mail->isHTML(true);
+        $mail->Body = $html;
+        $mail->send();
+    }
+
+    private static function newMailer(): PHPMailer
+    {
         $mail = new PHPMailer(true);
 
         $mail->isSMTP();
@@ -30,14 +84,8 @@ final class Mailer
             Config::get('MAIL_FROM_ADDRESS', 'info@example.com') ?? 'info@example.com',
             Config::get('MAIL_FROM_NAME', 'Aniet Illustration') ?? 'Aniet Illustration'
         );
-        $mail->addAddress($order['email'], $order['first_name'] . ' ' . $order['last_name']);
 
-        $mail->isHTML(true);
-        $mail->Subject = (!empty($order['is_digital']) ? 'Je download van bestelling ' : 'Bevestiging van je bestelling ') . $order['order_reference'];
-        $mail->Body = self::renderHtml($order);
-        $mail->AltBody = self::renderText($order);
-
-        $mail->send();
+        return $mail;
     }
 
     /**

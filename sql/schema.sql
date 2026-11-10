@@ -264,3 +264,10 @@ SELECT 'faire', 'Faire', '#4a3aff', '🟣', 0 WHERE NOT EXISTS (SELECT 1 FROM wh
 
 INSERT INTO wholesale_platforms (code, name, color, icon, sync_enabled)
 SELECT 'orderchamp', 'Orderchamp', '#ff5a5f', '🟠', 0 WHERE NOT EXISTS (SELECT 1 FROM wholesale_platforms WHERE code = 'orderchamp');
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    setting_key VARCHAR(64) NOT NULL,
+    setting_value TEXT DEFAULT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (setting_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
