@@ -15,7 +15,8 @@ use App\SpecialDownloadRepository;
 $token = trim((string) ($_GET['t'] ?? ''));
 $fileId = isset($_GET['f']) ? (int) $_GET['f'] : 0;
 
-$order = $token !== '' ? (new OrderRepository())->findByDownloadToken($token) : null;
+$orderRepository = new OrderRepository();
+$order = $token !== '' ? $orderRepository->findByDownloadToken($token) : null;
 $files = [];
 
 if ($order !== null && $order['status'] === 'paid' && $order['special_id'] !== null) {
@@ -36,6 +37,7 @@ if ($fileId > 0) {
         }
 
         $safeName = str_replace(['"', "\r", "\n", '\\'], '_', (string) $file['original_name']);
+        $orderRepository->registerDownload((int) $order['id']);
         header('Content-Type: application/octet-stream');
         header('Content-Disposition: attachment; filename="' . $safeName . '"; filename*=UTF-8\'\'' . rawurlencode((string) $file['original_name']));
         header('Content-Length: ' . filesize($path));

@@ -19,6 +19,7 @@ specials, orders
 - `orders.is_digital` + `orders.download_token` (64 hex, uniek): snapshot en toegang.
 - `specials/download.php?t={token}` toont de bestanden (alleen bij `status = paid`),
   `&f={id}` levert uit als attachment. Link blijft geldig (geen vervaldatum/limiet).
+- Downloadteller: `orders.download_count`/`last_downloaded_at` (migratie 013) wordt bij elke bestandsdownload opgehoogd en staat in de orderlijst (kolom "Downloads", rood met ⚠️ vanaf 10; tooltip = laatste download).
 - Mail (`Mailer`): bij digitale orders downloadknop i.p.v. verzendadres; bedankpagina
   toont ook de downloadknop. Mail gaat via bestaande `PaymentStatusSync` (webhook of
   bedankpagina).

@@ -164,6 +164,12 @@ final class OrderRepository
         return $row === false ? null : $row;
     }
 
+    public function registerDownload(int $orderId): void
+    {
+        $stmt = $this->db->prepare('UPDATE orders SET download_count = download_count + 1, last_downloaded_at = NOW() WHERE id = :id');
+        $stmt->execute(['id' => $orderId]);
+    }
+
     public function attachMolliePayment(int $orderId, string $paymentId): void
     {
         $stmt = $this->db->prepare('UPDATE orders SET mollie_payment_id = :pid WHERE id = :id');

@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS orders (
     notes TEXT DEFAULT NULL,
     mollie_payment_id VARCHAR(50) DEFAULT NULL,
     download_token CHAR(64) DEFAULT NULL,
+    download_count INT UNSIGNED NOT NULL DEFAULT 0,
+    last_downloaded_at DATETIME DEFAULT NULL,
     confirmation_email_sent_at DATETIME DEFAULT NULL,
     deleted_at DATETIME DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

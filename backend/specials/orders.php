@@ -192,6 +192,7 @@ require __DIR__ . '/../partials/layout-start.php';
                     <th>Totaal</th>
                     <th>Status</th>
                     <th>Mail verzonden</th>
+                    <th>Downloads</th>
                     <th>Acties</th>
                 </tr>
                 </thead>
@@ -208,7 +209,10 @@ require __DIR__ . '/../partials/layout-start.php';
                         <td><?= (int) $order['quantity'] ?></td>
                         <td>€ <?= h(number_format(((int) $order['total_amount_cents']) / 100, 2, ',', '.')) ?></td>
                         <td><span class="badge <?= orderBadgeClass($order['status']) ?>"><?= h($statusLabels[$order['status']] ?? $order['status']) ?></span></td>
-                        <td><?= $order['confirmation_email_sent_at'] !== null ? '✅' : '—' ?></td>
+                        <td><?php if (!empty($order['is_digital'])): ?>
+                            <?php $dl = (int) $order['download_count']; ?>
+                            <span title="<?= $order['last_downloaded_at'] !== null ? h('Laatst: ' . (new DateTimeImmutable($order['last_downloaded_at']))->format('d-m-Y H:i')) : '' ?>"<?= $dl >= 10 ? ' style="color:#c0392b;font-weight:700"' : '' ?>><?= $dl ?><?= $dl >= 10 ? ' ⚠️' : '' ?></span>
+                        <?php else: ?>—<?php endif; ?></td>
                         <td>
                             <div class="actions-dropdown">
                                 <button type="button" class="icon-btn actions-trigger" title="Acties" aria-label="Acties">⋮</button>
